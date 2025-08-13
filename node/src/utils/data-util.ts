@@ -19,7 +19,6 @@ export function parseCSVData(csvData: string): { columns: string[], rows: Record
   return { columns, rows };
 }
 
-
 export function inferDataType(value: string): "PLAIN" | "NUMBER" | "DATE" {
   if (!isNaN(parseFloat(value)) && isFinite(Number(value))) {
     return 'NUMBER';

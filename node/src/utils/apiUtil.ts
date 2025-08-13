@@ -1,6 +1,10 @@
 import AnalyticsClient from '../AnalyticsClient';
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
 
+dotenv.config({
+  path: path.resolve(__dirname, '../../.env')
+});
 
 interface Config {
   CLIENTID: string | undefined;
@@ -32,4 +36,3 @@ export const getAnalyticsClient = (): AnalyticsClient => {
   }
   return analyticsClientInstance;
 };
-

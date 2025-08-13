@@ -228,7 +228,7 @@ class AnalyticsClient
         var totalBatchCount = Math.ceil(totalLines / batchSize);
         config.batchKey = "start";
 
-        header['User-Agent'] = 'Analytics NodeJS Client v'+clientVersion;
+        header['User-Agent'] = 'MCP Server NPM Client: v1';
         for (let i = 0; i < totalBatchCount; i++)
         {   
             let batch = fileContent.slice(batchSize*i, batchSize + (i * batchSize))
@@ -320,7 +320,7 @@ class AnalyticsClient
 
     sendImportRequest(uriPath, config, header={}, filePath, data)
     {
-      header['User-Agent'] = 'Analytics NodeJS Client v'+clientVersion;
+      header['User-Agent'] = 'MCP Server NPM Client: v1';
       header.Authorization = 'Zoho-oauthtoken ' + this.accessToken;
 
       if(config !== null)
@@ -422,7 +422,7 @@ class AnalyticsClient
 
     sendExportRequest(uriPath, filePath, config, header={})
     {
-      header['User-Agent'] = 'Analytics NodeJS Client v'+clientVersion;
+      header['User-Agent'] = 'MCP Server NPM Client: v1';
       header.Authorization = 'Zoho-oauthtoken ' + this.accessToken;
 
       if(config !== null)
@@ -481,7 +481,7 @@ class AnalyticsClient
 
     sendV2Request(uriPath, reqMethod, config, header={}, isExportReq = false)
     {
-      header['User-Agent'] = 'Analytics NodeJS Client v'+clientVersion;
+      header['User-Agent'] = 'MCP Server NPM Client: v1';
       //header.Content-Type = 'application/x-www-form-urlencoded';
       header.Authorization = 'Zoho-oauthtoken ' + this.accessToken;
 
@@ -559,7 +559,7 @@ class AnalyticsClient
           path: '/oauth/v2/token',
           headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'Analytics NodeJS Client v'+clientVersion,
+          'User-Agent': 'MCP Server NPM Client: v1',
           'Content-Length': encodedParams.length
           },
           method: "POST",

@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { ServerInstance } from "../common";
 import {getAnalyticsClient, config } from '../utils/apiUtil';
 import { parseCSVData, inferDataType } from "../utils/data-util"
+import { retryWithFallback, ToolResponse, logAndReturnError } from "../utils/common";
+import { log } from "console";
 
 export function registerDataTools(server: ServerInstance) {
 
@@ -31,64 +33,50 @@ export function registerDataTools(server: ServerInstance) {
         `,
         inputSchema: {
         workspaceId: z.string().describe("The ID of the workspace where the query will be executed"),
-        sql_query: z.string().describe("The SQL query to be executed")
+        sql_query: z.string().describe("The SQL query to be executed"),
+        orgId: z.string().optional().describe("The organization ID for the request, if applicable. This is a mandatory parameter for shared workspaces")
         }
     },
-    async ({ workspaceId, sql_query }) => {
+    async ({ workspaceId, sql_query, orgId }) => {
         try {
-            const analyticsClient = getAnalyticsClient();
-            const bulk = analyticsClient.getBulkInstance(config.ORGID, workspaceId);
-            const job_id = await bulk.initiateBulkExportUsingSQL(sql_query, "CSV");
-            let waitTime = 2000;
-            const startTime = Date.now();
-            const MAX_WAIT_TIME = 60 * 1000;
-            let status = "IN_PROGRESS";
-            while (status === "IN_PROGRESS") {
-                if (Date.now() - startTime > MAX_WAIT_TIME) {
-                    throw new Error("The query is taking too long to execute. Please try again later.");
-                }
-                await new Promise(resolve => setTimeout(resolve, waitTime));
-                const jobDetails = await bulk.getExportJobDetails(job_id);
-                status = (jobDetails as any).status;
-                if (status === "COMPLETED") {
-                    break;
-                }
-                waitTime = Math.min(waitTime * 2, 16000);
+            if (!orgId) {
+                orgId = config.ORGID || "";
             }
-            if (status !== "COMPLETED") {
-                throw new Error(`Bulk export job failed or timed out. Status: ${status}`);
-            }
-            const tmpFilePath = `/tmp/${job_id}.csv`;
-            await bulk.exportBulkData(job_id, tmpFilePath);
-            const fs = require('fs');
-            const csvData = fs.readFileSync(tmpFilePath, 'utf8');
-            const parsedData = parseCSVData(csvData);
-            const ROW_LIMIT = 20;
-            const limitedRows = parsedData.rows.slice(0, ROW_LIMIT);
-            fs.unlinkSync(tmpFilePath);
-            return {
-                content: [
-                    { 
-                        type: "text", 
-                        text: `Query executed successfully. Retrieved ${limitedRows.length} rows.` 
-                    },
-                    {
-                        type: "text",
-                        text: JSON.stringify({
-                            columns: parsedData.columns,
-                            rows: limitedRows
-                        })
+            return await retryWithFallback([orgId], workspaceId, "WORKSPACE", async(orgId, workspace, sql) => {
+                const analyticsClient = getAnalyticsClient();
+                const bulk = analyticsClient.getBulkInstance(orgId, workspace);
+                const job_id = await bulk.initiateBulkExportUsingSQL(sql, "CSV");
+                let waitTime = 2000;
+                const startTime = Date.now();
+                const MAX_WAIT_TIME = 60 * 1000;
+                let status = "IN_PROGRESS";
+                while (status === "IN_PROGRESS") {
+                    if (Date.now() - startTime > MAX_WAIT_TIME) {
+                        throw new Error("The query is taking too long to execute. Please try again later.");
                     }
-                ]
-            };
-        } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-            content: [{ 
-                type: "text", 
-                text: `An error occurred while executing the query: ${errorMessage}` 
-            }]
-        };
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                    const jobDetails = await bulk.getExportJobDetails(job_id);
+                    status = (jobDetails as any).status;
+                    if (status === "COMPLETED") {
+                        break;
+                    }
+                    waitTime = Math.min(waitTime * 2, 16000);
+                }
+                if (status !== "COMPLETED") {
+                    throw new Error(`Bulk export job failed or timed out. Status: ${status}`);
+                }
+                const tmpFilePath = `/tmp/${job_id}.csv`;
+                await bulk.exportBulkData(job_id, tmpFilePath);
+                const fs = require('fs');
+                const csvData = fs.readFileSync(tmpFilePath, 'utf8');
+                const parsedData = parseCSVData(csvData);
+                const ROW_LIMIT = 20;
+                const limitedRows = parsedData.rows.slice(0, ROW_LIMIT);
+                fs.unlinkSync(tmpFilePath);
+                return ToolResponse(`Query executed successfully. Retrieved ${limitedRows.length} rows.\n${JSON.stringify({columns: parsedData.columns, rows: limitedRows})}`);
+            }, workspaceId, sql_query);
+        } catch (err) {
+            return logAndReturnError(err, "An error occurred while executing the query");
         }
     });
 
@@ -120,12 +108,7 @@ export function registerDataTools(server: ServerInstance) {
             const path = require('path');
             const csv = require('csv-parser');
             if (!fs.existsSync(file_path)) {
-                return {
-                    content: [{ 
-                        type: "text", 
-                        text: `${file_path} does not exist. Please provide a valid file path.` 
-                    }]
-                };
+                return ToolResponse(`${file_path} does not exist. Please provide a valid file path.`);
             }
             const fileExtension = path.extname(file_path).toLowerCase();            // Process based on file type
             if (fileExtension === '.csv') {
@@ -168,27 +151,11 @@ export function registerDataTools(server: ServerInstance) {
                                     structure[key] = 'TEXT';
                                 }
                             });
-                            
-                            resolve({
-                                content: [
-                                    { 
-                                        type: "text", 
-                                        text: `Successfully analyzed CSV file structure at: ${file_path}` 
-                                    },
-                                    {
-                                        type: "json",
-                                        json: structure
-                                    }
-                                ]
-                            });
+
+                            resolve(ToolResponse(`Successfully analyzed CSV file structure at: ${file_path}`));
                         })
                         .on('error', (error: Error) => {
-                            reject({
-                                content: [{ 
-                                    type: "text", 
-                                    text: `Error parsing CSV file: ${error.message}` 
-                                }]
-                            });
+                            reject(logAndReturnError(error, `An error occurred while analyzing the CSV file structure`));
                         });
                 });
                 
@@ -214,45 +181,17 @@ export function registerDataTools(server: ServerInstance) {
                             structure[column] = 'TEXT';
                         }
                     }
-                    
-                    return {
-                        content: [
-                            { 
-                                type: "text", 
-                                text: `Successfully analyzed JSON file structure at: ${file_path}` 
-                            },
-                            {
-                                type: "json",
-                                json: structure
-                            }
-                        ]
-                    };
+                    return ToolResponse(`Successfully analyzed JSON file structure at: ${file_path}, structure: ` + structure);
                 } else {
-                    return {
-                        content: [{ 
-                            type: "text", 
-                            text: "Invalid JSON format. Expected a list of objects." 
-                        }]
-                    };
+                    return ToolResponse("Invalid JSON format. Expected a list of objects.");
                 }
                 
             } else {
-                return {
-                    content: [{ 
-                        type: "text", 
-                        text: "Unsupported file type. Please provide a CSV or JSON file." 
-                    }]
-                };
+                return ToolResponse("Unsupported file type. Please provide a CSV or JSON file.");
             }
         }
-        catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            return {
-                content: [{ 
-                    type: "text", 
-                    text: `An error occurred while analyzing file structure: ${errorMessage}` 
-                }]
-            };
+        catch (err) {
+            return logAndReturnError(err, `An error occurred while analyzing file structure`);
         }
     });
 
@@ -271,39 +210,33 @@ export function registerDataTools(server: ServerInstance) {
             workspaceId: z.string().describe("The ID of the workspace from which to export objects"),
             view_id: z.string().describe("The ID of the Zoho Analytics view to be exported. This can be a table, chart, or dashboard"),
             response_file_format: z.enum(["csv", "html", "pdf"]).describe("The format in which to export the objects. Supported formats are \"csv\", \"html\", \"pdf\""),
-            response_file_path: z.string().describe("The path where the exported file will be saved")
+            response_file_path: z.string().describe("The path where the exported file will be saved"),
+            orgId: z.string().optional().describe("The organization ID for the request, if applicable. This is a mandatory parameter for shared workspaces")
         }
     },
-    async ({ workspaceId, view_id, response_file_format, response_file_path }) => {
+    async ({ workspaceId, view_id, response_file_format, response_file_path, orgId }) => {
         try {
-
-            const analyticsClient = getAnalyticsClient();
-            const bulk = analyticsClient.getBulkInstance(config.ORGID || "", workspaceId);
-            const path = require('path');
-            const fs = require('fs');
-            let fullPath = response_file_path;
-            if (config.MCP_DATA_DIR) {
-                fullPath = path.join(config.MCP_DATA_DIR, response_file_path);
-                const dir = path.dirname(fullPath);
-                if (!fs.existsSync(dir)) {
-                    fs.mkdirSync(dir, { recursive: true });
-                }
+            if (!orgId) {
+                orgId = config.ORGID || "";
             }
-            await bulk.exportData(view_id, response_file_format, fullPath);
-            return {
-                content: [{ 
-                    type: "text", 
-                    text: `Object exported successfully to ${fullPath} in ${response_file_format} format.` 
-                }]
-            };
+            return await retryWithFallback([orgId], workspaceId, "WORKSPACE", async (orgId, workspace, view, response_format, response_path)=> {
+                const analyticsClient = getAnalyticsClient();
+                const bulk = analyticsClient.getBulkInstance(orgId || "", workspace);
+                const path = require('path');
+                const fs = require('fs');
+                let fullPath = response_path;
+                if (config.MCP_DATA_DIR) {
+                    fullPath = path.join(config.MCP_DATA_DIR, response_path);
+                    const dir = path.dirname(fullPath);
+                    if (!fs.existsSync(dir)) {
+                        fs.mkdirSync(dir, { recursive: true });
+                    }
+                }
+                await bulk.exportData(view, response_format, fullPath);
+                return ToolResponse(`Object exported successfully to ${fullPath} in ${response_format} format.`);
+            }, workspaceId, view_id, response_file_format, response_file_path);
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            return {
-                content: [{ 
-                    type: "text", 
-                    text: `An error occurred while exporting the view: ${errorMessage}` 
-                }]
-            };
+            return logAndReturnError(error, `An error occurred while exporting the view`);
         }
     });
 
@@ -347,30 +280,14 @@ export function registerDataTools(server: ServerInstance) {
             response.data.pipe(writer);
             return await new Promise((resolve, reject) => {
                 writer.on('finish', () => {
-                    resolve({
-                        content: [{ 
-                            type: "text", 
-                            text: `File downloaded successfully and saved to ${downloadedPath}` 
-                        }]
-                    });
+                    resolve(ToolResponse(`File downloaded successfully and saved to ${downloadedPath}`));
                 });
                 writer.on('error', (err: Error) => {
-                    reject({
-                        content: [{ 
-                            type: "text", 
-                            text: `An error occurred while downloading the file: ${err.message}` 
-                        }]
-                    });
+                    reject(logAndReturnError(err, `An error occurred while downloading the file from ${file_url}`));
                 });
             });
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            return {
-                content: [{ 
-                    type: "text", 
-                    text: `Failed to download the file. Please check the URL and try again. Please make sure the file is accessible and the URL is correct. Error: ${errorMessage}` 
-                }]
-            };
+            return logAndReturnError(error, `Failed to download the file from ${file_url}`);
         }
     });
 
@@ -398,71 +315,40 @@ export function registerDataTools(server: ServerInstance) {
         tableId: z.string().describe("The ID of the table to which data will be added. It is None if the data needs to be added to a new table"),
         data: z.array(z.record(z.string(), z.any())).optional().describe("The data to be added to the table in json format"),
         file_path: z.string().optional().describe("The path to a local file containing data to be added to the table"),
-        file_type: z.enum(["csv", "json"]).optional().describe("The type of the file being imported (\"csv\", \"json\")")
+        file_type: z.enum(["csv", "json"]).optional().describe("The type of the file being imported (\"csv\", \"json\")"),
+        orgId: z.string().optional().describe("The organization ID for the request, if applicable. This is a mandatory parameter for shared workspaces")
         }
     },
-    async ({ workspaceId, tableId, data, file_path, file_type }) => {
+    async ({ workspaceId, tableId, data, file_path, file_type, orgId }) => {
         try {
-
-            const analyticsClient = getAnalyticsClient();
-            const bulk = analyticsClient.getBulkInstance(config.ORGID || "", workspaceId);
-            if (file_path) {
-                if (file_path.startsWith("https")) {
-                    return {
-                        content: [{ 
-                            type: "text", 
-                            text: "File path cannot be a remote URL. Please download the file using the download_file tool and provide the local file path." 
-                        }]
-                    };
-                }
-                const fs = require('fs');
-                if (!fs.existsSync(file_path)) {
-                    return {
-                        content: [{ 
-                            type: "text", 
-                            text: `File ${file_path} does not exist. Please provide a valid local file path.` 
-                        }]
-                    };
-                }
-                if (!file_type || (file_type !== "csv" && file_type !== "json")) {
-                    return {
-                        content: [{ 
-                            type: "text", 
-                            text: "Invalid file type. Please provide 'csv' or 'json'." 
-                        }]
-                    };
-                }
-                const result = await bulk.importData(tableId, "append", file_type, "true", file_path, { delimiter: '0' });
-                return {
-                    content: [{ 
-                        type: "text", 
-                        text: JSON.stringify(result) 
-                    }]
-                };
+            if (!orgId) {
+                orgId = config.ORGID || "";
             }
-            if (!data) {
-                return {
-                    content: [{ 
-                        type: "text", 
-                        text: "No data provided to import. Please provide either 'data' or 'local_file_path'." 
-                    }]
-                };
-            }
-            const result = await bulk.importRawData(tableId, "append", "json", "true", JSON.stringify(data), { delimiter: '0' });
-            return {
-                content: [{ 
-                    type: "text", 
-                    text: JSON.stringify(result)  
-                }]
-            };
+            return await retryWithFallback([orgId], workspaceId, "WORKSPACE", async (orgId, workspace, table, input , path, type) => {
+                const analyticsClient = getAnalyticsClient();
+                const bulk = analyticsClient.getBulkInstance(orgId || "", workspace);
+                if (path) {
+                    if (path.startsWith("https")) {
+                        return ToolResponse("File path cannot be a remote URL. Please download the file using the download_file tool and provide the local file path.");
+                    }
+                    const fs = require('fs');
+                    if (!fs.existsSync(path)) {
+                        return ToolResponse(`File ${path} does not exist. Please provide a valid local file path.`);
+                    }
+                    if (!type || (type !== "csv" && type !== "json")) {
+                        return ToolResponse("File type must be specified as 'csv' or 'json'.");
+                    }
+                    const result = await bulk.importData(table, "append", type, "true", path, { delimiter: '0' });
+                    return ToolResponse(JSON.stringify(result));
+                }
+                if (!input) {
+                    return ToolResponse("No data provided to import. Please provide either 'data' or 'local_file_path'.");
+                }
+                const result = await bulk.importRawData(table, "append", "json", "true", JSON.stringify(input), { delimiter: '0' });
+                return ToolResponse(JSON.stringify(result));
+            }, workspaceId, tableId,  data, file_path, file_type);
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            return {
-                content: [{ 
-                    type: "text", 
-                    text: `An error occurred while adding data to the table: ${errorMessage}` 
-                }]
-            };
+            return logAndReturnError(error, "An error occurred while importing data into the table");
         }
     });
 }

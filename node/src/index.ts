@@ -3,7 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { registerMetaDataTools } from "./tools/metadata-tools";
 import { registerModellingTools } from "./tools/modelling-tools";
 import { registerDataTools } from "./tools/data-tools";
-import { registerRowTools } from "./tools/row-tools"; 
+import { registerRowTools } from "./tools/row-tools";
 
 
 const server = new McpServer({

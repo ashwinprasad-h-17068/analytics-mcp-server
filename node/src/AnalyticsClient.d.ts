@@ -446,6 +446,8 @@ declare module './AnalyticsClient' {
         getAdmins(config?: Config): Promise<JSONArray>;
 
         getViews(config?: Config): Promise<JSONArray>;
+
+        createReport(config?: Config): Promise<JSONArray>;
     }
 
     class ViewAPI {

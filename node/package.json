@@ -1,8 +1,8 @@
 {
-  "name": "app",
+  "name": "zoho_analytics_mcp_server",
   "version": "1.0.0",
-  "description": "",
-  "main": "AnalyticsClient.js",
+  "description": "Mcp server implementation for Zoho Analytics",
+  "main": "index.js",
   "scripts": {
     "dev": "ts-node src/index.ts",
     "build": "tsc",
