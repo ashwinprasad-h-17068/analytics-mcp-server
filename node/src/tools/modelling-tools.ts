@@ -469,12 +469,6 @@ Important Notes:
       <use_case>
         Delete a view (table, report, or dashboard) in the specified workspace.
       </use_case>
-
-      <arguments>
-        - workspace_id (string): The ID of the workspace containing the view.
-        - view_id (string): The ID of the view to delete.
-        - org_id (string | null | undefined): The ID of the organization to which the workspace belongs. Defaults to config.ORGID if not provided.
-      </arguments>
       `,
       inputSchema: {
         workspace_id: z.string(),

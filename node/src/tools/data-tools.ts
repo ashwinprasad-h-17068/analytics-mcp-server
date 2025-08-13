@@ -1,9 +1,52 @@
 import { z } from "zod";
 import type { ServerInstance } from "../common";
 import {getAnalyticsClient, config } from '../utils/apiUtil';
-import { parseCSVData, inferDataType } from "../utils/data-util"
 import { retryWithFallback, ToolResponse, logAndReturnError } from "../utils/common";
-import { log } from "console";
+
+
+const QUERY_DATA_POLLING_INTERVAL = 2000; // 2 seconds
+const QUERY_DATA_QUEUE_TIMEOUT = 30 * 1000; // 30 seconds
+const QUERY_DATA_QUERY_EXECUTION_TIMEOUT = 60 * 1000; // 60 seconds
+const QUERY_DATA_ROW_LIMIT = 20;
+
+
+async function pollJobCompletion(
+    bulk: any,
+    jobId: string,
+    statusMessages: Record<string, string>,
+    pollingInterval: number,
+    queueTimeout: number,
+    executionTimeout: number
+): Promise<string | null> {
+    const startTime = Date.now();
+    let processingStartTime: number | null = null;
+
+    while (true) {
+        const jobDetails = await bulk.getExportJobDetails(jobId);
+        const currentTime = Date.now();
+
+        if (jobDetails.jobCode === '1004') { // JOB COMPLETED
+            break;
+        } else if (jobDetails.jobCode === '1003') { // ERROR OCCURRED
+            return statusMessages.error;
+        } else if (jobDetails.jobCode === '1001') { // JOB NOT INITIATED
+            if (currentTime - startTime > queueTimeout) {
+                return statusMessages.queue_timeout;
+            }
+        } else if (jobDetails.jobCode === '1002') { // JOB IN PROGRESS
+            if (processingStartTime === null) {
+                processingStartTime = currentTime;
+            } else if (currentTime - processingStartTime > executionTimeout) {
+                return statusMessages.execution_timeout;
+            }
+        }
+
+        await new Promise(resolve => setTimeout(resolve, pollingInterval));
+    }
+
+    return null;
+}
+
 
 export function registerDataTools(server: ServerInstance) {
 
@@ -45,35 +88,44 @@ export function registerDataTools(server: ServerInstance) {
             return await retryWithFallback([orgId], workspaceId, "WORKSPACE", async(orgId, workspace, sql) => {
                 const analyticsClient = getAnalyticsClient();
                 const bulk = analyticsClient.getBulkInstance(orgId, workspace);
-                const job_id = await bulk.initiateBulkExportUsingSQL(sql, "CSV");
-                let waitTime = 2000;
-                const startTime = Date.now();
-                const MAX_WAIT_TIME = 60 * 1000;
-                let status = "IN_PROGRESS";
-                while (status === "IN_PROGRESS") {
-                    if (Date.now() - startTime > MAX_WAIT_TIME) {
-                        throw new Error("The query is taking too long to execute. Please try again later.");
-                    }
-                    await new Promise(resolve => setTimeout(resolve, waitTime));
-                    const jobDetails = await bulk.getExportJobDetails(job_id);
-                    status = (jobDetails as any).status;
-                    if (status === "COMPLETED") {
-                        break;
-                    }
-                    waitTime = Math.min(waitTime * 2, 16000);
+
+                const jobId = await bulk.initiateBulkExportUsingSQL(sql, "CSV");
+
+                const statusMessages: Record<string, string> = {
+                    error: "Some internal error occurred (Not likely due to the query). Please try again later.",
+                    queue_timeout: "Query Job accepted, but queue processing is slow. Please try again later.",
+                    execution_timeout: "Query is taking too long to execute, maybe due to the complexity. Please try a simpler query"
+                };
+
+                const errorMessage = await pollJobCompletion(
+                    bulk,
+                    jobId,
+                    statusMessages,
+                    QUERY_DATA_POLLING_INTERVAL,
+                    QUERY_DATA_QUEUE_TIMEOUT,
+                    QUERY_DATA_QUERY_EXECUTION_TIMEOUT
+                );
+
+                if (errorMessage) {
+                    throw new Error(errorMessage);
                 }
-                if (status !== "COMPLETED") {
-                    throw new Error(`Bulk export job failed or timed out. Status: ${status}`);
-                }
-                const tmpFilePath = `/tmp/${job_id}.csv`;
-                await bulk.exportBulkData(job_id, tmpFilePath);
+
+                const tmpFilePath = `/tmp/${jobId}.csv`;
+                await bulk.exportBulkData(jobId, tmpFilePath);
+
                 const fs = require('fs');
                 const csvData = fs.readFileSync(tmpFilePath, 'utf8');
-                const parsedData = parseCSVData(csvData);
-                const ROW_LIMIT = 20;
-                const limitedRows = parsedData.rows.slice(0, ROW_LIMIT);
                 fs.unlinkSync(tmpFilePath);
-                return ToolResponse(`Query executed successfully. Retrieved ${limitedRows.length} rows.\n${JSON.stringify({columns: parsedData.columns, rows: limitedRows})}`);
+
+                const rows: string[][] = csvData
+                    .trim()
+                    .split('\n')
+                    .map((line: string) => line.split(','));
+
+                const columns: string[] = rows.shift() || [];
+                const limitedRows: string[][] = rows.slice(0, QUERY_DATA_ROW_LIMIT);
+
+                return ToolResponse(`Query executed successfully. Retrieved ${limitedRows.length} rows.\n${JSON.stringify({ columns, rows: limitedRows })}`);
             }, workspaceId, sql_query);
         } catch (err) {
             return logAndReturnError(err, "An error occurred while executing the query");
