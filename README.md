@@ -102,7 +102,7 @@ The following is a list of other optional environment variables:
 <table>
   <tbody>
     <tr>
-      <td>QUERY_DATA_ROW_LIMIT (Optional)</td>
+      <td>QUERY_DATA_RESULT_ROW_LIMITS (Optional)</td>
       <td>Number of rows outputted by the query_data tool. <br><br>Default row limit - 20</td>
     </tr>
     <tr>
