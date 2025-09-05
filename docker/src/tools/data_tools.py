@@ -9,6 +9,7 @@ from utils.common import retry_with_fallback
 from utils.data_utils import import_data_implementation, export_view_implementation, query_data_implementation
 import traceback
 from fastmcp.server.dependencies import get_context
+from utils.data_utils import with_dynamic_doc
 
 
 @mcp.tool()
@@ -187,10 +188,9 @@ async def export_view(workspace_id: str, view_id: str, response_file_format: str
 
 
 @mcp.tool()
-async def query_data(workspace_id: str, sql_query: str, org_id: str | None = None) -> list[dict]:
-    """
+@with_dynamic_doc("""
     <use_case>
-    1. Executes a SQL query on the specified workspace and returns the top 20 rows as results.
+    1. Executes a SQL query on the specified workspace and returns the top {QUERY_DATA_TOOL_RESULT_LIMIT} rows as results.
     2. This can be used to retrieve data from Zoho Analytics using custom SQL queries.
     3. Use this when user asks for any queries from the data in the workspace.
     4. Use this to gather insights from the data in the workspace and answer user queries.
@@ -212,10 +212,11 @@ async def query_data(workspace_id: str, sql_query: str, org_id: str | None = Non
     </arguments>
 
     <returns>
-        Result of the SQL query in a comma-separated (list of list) format of the top 20 rows alone, the first row contains the column names. 
+        Result of the SQL query in a comma-separated (list of list) format of the top {QUERY_DATA_TOOL_RESULT_LIMIT} rows alone, the first row contains the column names. 
         If an error occurs, returns an error message.
     </returns>
-    """
+    """)
+async def query_data(workspace_id: str, sql_query: str, org_id: str | None = None) -> list[dict]:
     if not org_id:
         org_id = Config.ORG_ID
     try:

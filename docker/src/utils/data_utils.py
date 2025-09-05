@@ -113,3 +113,17 @@ def export_view_implementation(org_id, response_file_format, response_file_path,
             raise e
     return f"Object exported successfully to {response_file_path} in {response_file_format} format."
 
+
+def with_dynamic_doc(doc_template: str):
+    """
+    Decorator to dynamically set the docstring of a function based on a template.
+    The template can include placeholders for the function name and other parameters.
+    """
+    def decorator(func):
+        limit = os.getenv("QUERY_DATA_TOOL_RESULT_LIMIT", "20")
+        func.__doc__ = doc_template.format(
+            QUERY_DATA_TOOL_RESULT_LIMIT=limit,
+            function_name=func.__name__
+        )
+        return func
+    return decorator
