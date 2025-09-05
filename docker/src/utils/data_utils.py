@@ -3,10 +3,10 @@ import time
 import csv
 import os
 
-QUERY_DATA_ROW_LIMIT = os.getenv("QUERY_DATA_RESULT_ROW_LIMITS") or 20
-QUERY_DATA_POLLING_INTERVAL = os.getenv("QUERY_DATA_POLLING_INTERVAL") or 4
-QUERY_DATA_QUEUE_TIMEOUT = os.getenv("QUERY_DATA_QUEUE_TIMEOUT") or 120
-QUERY_DATA_QUERY_EXECUTION_TIMEOUT = os.getenv("QUERY_DATA_QUERY_EXECUTION_TIMEOUT") or 30
+QUERY_DATA_ROW_LIMIT = int(os.getenv("QUERY_DATA_RESULT_ROW_LIMITS")) or 20
+QUERY_DATA_POLLING_INTERVAL = int(os.getenv("QUERY_DATA_POLLING_INTERVAL")) or 4
+QUERY_DATA_QUEUE_TIMEOUT = int(os.getenv("QUERY_DATA_QUEUE_TIMEOUT")) or 120
+QUERY_DATA_QUERY_EXECUTION_TIMEOUT = int(os.getenv("QUERY_DATA_QUERY_EXECUTION_TIMEOUT")) or 30
 
 
 def poll_job_completion(bulk, job_id, status_messages, polling_interval=None, queue_timeout=None, execution_timeout=None):
