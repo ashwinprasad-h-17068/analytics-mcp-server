@@ -2,77 +2,34 @@ import { z } from "zod";
 import type { ServerInstance } from "../common";
 import {getAnalyticsClient, config } from '../utils/apiUtil';
 import { retryWithFallback, ToolResponse, logAndReturnError } from "../utils/common";
-
-
-const QUERY_DATA_POLLING_INTERVAL = 2000; // 2 seconds
-const QUERY_DATA_QUEUE_TIMEOUT = 30 * 1000; // 30 seconds
-const QUERY_DATA_QUERY_EXECUTION_TIMEOUT = 60 * 1000; // 60 seconds
-const QUERY_DATA_ROW_LIMIT = 20;
-
-
-async function pollJobCompletion(
-    bulk: any,
-    jobId: string,
-    statusMessages: Record<string, string>,
-    pollingInterval: number,
-    queueTimeout: number,
-    executionTimeout: number
-): Promise<string | null> {
-    const startTime = Date.now();
-    let processingStartTime: number | null = null;
-
-    while (true) {
-        const jobDetails = await bulk.getExportJobDetails(jobId);
-        const currentTime = Date.now();
-
-        if (jobDetails.jobCode === '1004') { // JOB COMPLETED
-            break;
-        } else if (jobDetails.jobCode === '1003') { // ERROR OCCURRED
-            return statusMessages.error;
-        } else if (jobDetails.jobCode === '1001') { // JOB NOT INITIATED
-            if (currentTime - startTime > queueTimeout) {
-                return statusMessages.queue_timeout;
-            }
-        } else if (jobDetails.jobCode === '1002') { // JOB IN PROGRESS
-            if (processingStartTime === null) {
-                processingStartTime = currentTime;
-            } else if (currentTime - processingStartTime > executionTimeout) {
-                return statusMessages.execution_timeout;
-            }
-        }
-
-        await new Promise(resolve => setTimeout(resolve, pollingInterval));
-    }
-
-    return null;
-}
+import dedent from "dedent";
+import path from "path";
+import fs from "fs";
+import { pollJobCompletion, QUERY_DATA_POLLING_INTERVAL, QUERY_DATA_QUEUE_TIMEOUT, QUERY_DATA_QUERY_EXECUTION_TIMEOUT, QUERY_DATA_ROW_LIMIT } from "../utils/data-util";
 
 
 export function registerDataTools(server: ServerInstance) {
 
     server.registerTool("query_data",
     {
-        description: `
-        <use_case>
-        1. Executes a SQL query on the specified workspace and returns the top 20 rows as results.
-        2. This can be used to retrieve data from Zoho Analytics using custom SQL queries.
-        3. Use this when user asks for any queries from the data in the workspace.
-        4. Use this to gather insights from the data in the workspace and answer user queries.
-        5. Can be used to answer natural language queries by analysing the result of the SQL query.
-        </use_case>
-
-        <important_notes>
+        description: dedent`
+        use case:
+        - Executes a SQL query on the specified workspace and returns the top 20 rows as results.
+        - This can be used to retrieve data from Zoho Analytics using custom SQL queries.
+        - Use this when user asks for any queries from the data in the workspace.
+        - Use this to gather insights from the data in the workspace and answer user queries.
+        - Can be used to answer natural language queries by analysing the result of the SQL query.
+        
+        important_notes:
         - Always try to provide a mysql compatible sql select query alone.
         - Try to optimize the query to return only the required data and minimize the amount of data returned.
         - If table or column names contain spaces or special characters, enclose them in double quotes (e.g., "Column Name").
         - Do not use more than one level of nested sub-queries.
         - Instead of doing n queries, try to combine them into a single query using joins or unions or sub-queries, while ensuring the query remains efficient.
-        </important_notes>
 
-        <returns>
-            Result of the SQL query in a comma-separated (list of list) format of the top 20 rows alone, the first row contains the column names. 
-            If an error occurs, returns an error message.
-        </returns>
+        returns:
+        - Result of the SQL query in a comma-separated (list of list) format of the top 20 rows alone, the first row contains the column names. 
+        - If an error occurs, returns an error message.
         `,
         inputSchema: {
         workspaceId: z.string().describe("The ID of the workspace where the query will be executed"),
@@ -134,24 +91,21 @@ export function registerDataTools(server: ServerInstance) {
 
     server.registerTool("analyze_file_structure",
     {
-        description: `
-        <use_case>
-        1. Analyzes the structure of a file (CSV or JSON) to determine its columns and data types.
-        2. This can be used to understand the structure of a file before importing it into Zoho Analytics.
-        3. If the table does not already exist and a file needs to be imported, this tool can be used to analyze the file structure and create a new table with the appropriate columns. 
-        </use_case>
+        description: dedent`
+        use_case:
+        - Analyzes the structure of a file (CSV or JSON) to determine its columns and data types.
+        - This can be used to understand the structure of a file before importing it into Zoho Analytics.
+        - If the table does not already exist and a file needs to be imported, this tool can be used to analyze the file structure and create a new table with the appropriate columns.
 
-        <important_notes>
+        important_notes:
         - This tool supports only local files. If the file is a remote URL, download it first using the download_file tool.
         - The returned data types will not be the exact data types used in Zoho Analytics, but rather a general representation of the data types in Python.
-        </important_notes>
 
-        <returns>
-            A dictionary containing the column names and their respective data types.
-        </returns>
+        returns:
+        - A dictionary containing the column names and their respective data types.
         `,
         inputSchema: {
-        file_path: z.string().describe("The path to the local file to be analyzed")
+            file_path: z.string().describe("The path to the local file to be analyzed")
         }
     },
     async ({ file_path }) => {
@@ -249,21 +203,19 @@ export function registerDataTools(server: ServerInstance) {
 
     server.registerTool("export_view",
     {
-        description: `
-        <use_case>
-            Export an object from the workspace in the specified format. These objects can be tables, charts, or dashboards.
-        </use_case>
-
-        <important_notes>
-            Mostly prefer html for charts and dashboards, and csv for tables.
-        </important_notes>
+        description: dedent`
+        use_case:
+        - Export an object from the workspace in the specified format. These objects can be tables, charts, or dashboards.
+        
+        important_notes:
+        - Mostly prefer html for charts and dashboards, and csv for tables.
         `,
         inputSchema: {
             workspaceId: z.string().describe("The ID of the workspace from which to export objects"),
             view_id: z.string().describe("The ID of the Zoho Analytics view to be exported. This can be a table, chart, or dashboard"),
-            response_file_format: z.enum(["csv", "html", "pdf"]).describe("The format in which to export the objects. Supported formats are \"csv\", \"html\", \"pdf\""),
+            response_file_format: z.enum(["csv", "html", "pdf", "json", "xml", "xls", "image"]).describe('The format in which to export the objects. Supported formats are ["csv","json","xml","xls","pdf","html","image"].'),
             response_file_path: z.string().describe("The path where the exported file will be saved"),
-            orgId: z.string().optional().describe("The organization ID for the request, if applicable. This is a mandatory parameter for shared workspaces")
+            orgId: z.string().optional().describe("The ID of the organization to which the workspace belongs to. If not provided, it defaults to the organization ID from the configuration.")
         }
     },
     async ({ workspaceId, view_id, response_file_format, response_file_path, orgId }) => {
@@ -272,10 +224,16 @@ export function registerDataTools(server: ServerInstance) {
                 orgId = config.ORGID || "";
             }
             return await retryWithFallback([orgId], workspaceId, "WORKSPACE", async (orgId, workspace, view, response_format, response_path)=> {
+                const supportedFormats = ["csv", "json", "xml", "xls", "pdf", "html", "image"];
+                if (!supportedFormats.includes(response_format)) {
+                    return ToolResponse(
+                        `Invalid response file format. Supported formats are ${JSON.stringify(supportedFormats)}.`
+                    );
+                }
+
                 const analyticsClient = getAnalyticsClient();
                 const bulk = analyticsClient.getBulkInstance(orgId || "", workspace);
-                const path = require('path');
-                const fs = require('fs');
+
                 let fullPath = response_path;
                 if (config.MCP_DATA_DIR) {
                     fullPath = path.join(config.MCP_DATA_DIR, response_path);
@@ -284,8 +242,40 @@ export function registerDataTools(server: ServerInstance) {
                         fs.mkdirSync(dir, { recursive: true });
                     }
                 }
-                await bulk.exportData(view, response_format, fullPath);
-                return ToolResponse(`Object exported successfully to ${fullPath} in ${response_format} format.`);
+
+                try {
+                    await bulk.exportData(view, response_format, fullPath);
+                } catch (e: any) {
+                    if (e?.errorCode === 8133) {
+
+                        if (response_format !== "pdf") {
+                            return ToolResponse(
+                                `Exporting view ${view} in ${response_format} format is not supported. Please use 'pdf' format for dashboards.`
+                            );
+                        }
+
+                        const jobId = await bulk.initiateBulkExport(view, "pdf", { dashboardLayout: 1 });
+
+                        const statusMessages: Record<string, string> = {
+                            error: "Some internal error ocurred. Please try again later.",
+                            queue_timeout: "Dashboard export Job accepted, but queue processing is slow. Please try again later.",
+                            execution_timeout: "Dashboard is taking too long to export, maybe due to the complexity. Please try again later."
+                        };
+
+                        const errorMessage = await pollJobCompletion(bulk, jobId, statusMessages);
+                        if (errorMessage) {
+                            return ToolResponse(errorMessage);
+                        }
+
+                        await bulk.exportBulkData(jobId, fullPath);
+                    } else {
+                        throw e;
+                    }
+                }
+
+                return ToolResponse(
+                    `Object exported successfully to ${fullPath} in ${response_format} format.`
+                );
             }, workspaceId, view_id, response_file_format, response_file_path);
         } catch (error) {
             return logAndReturnError(error, `An error occurred while exporting the view`);
@@ -294,15 +284,13 @@ export function registerDataTools(server: ServerInstance) {
 
     server.registerTool("download_file",
     {
-        description: `
-        <use_case>
-        1. Downloads a file from a given URL and saves it to a local directory.
-        2. This can be used to download files that need to be imported into Zoho Analytics.
-        </use_case>
+        description: dedent`
+        use_case:
+        - Downloads a file from a given URL and saves it to a local directory.
+        - This can be used to download files that need to be imported into Zoho Analytics.
 
-        <returns>
-            A string indicating the path where the file has been saved locally.
-        </returns>
+        returns:
+        - A string indicating the path where the file has been saved locally.
         `,
         inputSchema: {
         file_url: z.string().describe("The URL of the file to be downloaded")
@@ -345,30 +333,27 @@ export function registerDataTools(server: ServerInstance) {
 
     server.registerTool("import_data",
     {
-        description: `
-        <use_case>
-        1. Imports data into a specified table in a workspace. The data to be imported should be provided as a list of dictionaries or as a file path (only local file). If file_path is provided, the format of the file should also be provided (csv or json), else the data parameter will be used.
-        2. This can be used for both file upload as well as direct data import into a table.
-        </use_case>
-
-        <important_notes>
+        description: dedent`
+        use_case:
+        - Imports data into a specified table in a workspace. The data to be imported should be provided as a list of dictionaries or as a file path (only local file). If file_path is provided, the format of the file should also be provided (csv or json), else the data parameter will be used.
+        - This can be used for both file upload as well as direct data import into a table.
+        
+        important_notes:
         - Make sure the the table already exists in the workspace before importing data.
         - If no table exists, create a table first using the create_table tool before importing the data.
         - if the file_path is a remote URL, download the file using download_file tool before using this tool.
         - if the file_path is a remote URL and table does not exist, you can create a new table using the create_table tool, analyse the structure (column structure of the table) of the file using analyse_file_structure tool and then import the data.
-        </important_notes>
 
-        <returns>
-            A string indicating the result of the import operation. If successful, it returns a success message; otherwise, it returns an error message.
-        </returns>
+        returns:
+        - A string indicating the result of the import operation. If successful, it returns a success message; otherwise, it returns an error message.
         `,
         inputSchema: {
-        workspaceId: z.string().describe("The ID of the workspace containing the table"),
-        tableId: z.string().describe("The ID of the table to which data will be added. It is None if the data needs to be added to a new table"),
-        data: z.array(z.record(z.string(), z.any())).optional().describe("The data to be added to the table in json format"),
-        file_path: z.string().optional().describe("The path to a local file containing data to be added to the table"),
-        file_type: z.enum(["csv", "json"]).optional().describe("The type of the file being imported (\"csv\", \"json\")"),
-        orgId: z.string().optional().describe("The organization ID for the request, if applicable. This is a mandatory parameter for shared workspaces")
+            workspaceId: z.string().describe("The ID of the workspace containing the table"),
+            tableId: z.string().describe("The ID of the table to which data will be added. It is None if the data needs to be added to a new table"),
+            data: z.array(z.record(z.string(), z.any())).optional().describe("The data to be added to the table in json format"),
+            file_path: z.string().optional().describe("The path to a local file containing data to be added to the table"),
+            file_type: z.enum(["csv", "json"]).optional().describe("The type of the file being imported (\"csv\", \"json\")"),
+            orgId: z.string().optional().describe("The organization ID for the request, if applicable. This is a mandatory parameter for shared workspaces")
         }
     },
     async ({ workspaceId, tableId, data, file_path, file_type, orgId }) => {

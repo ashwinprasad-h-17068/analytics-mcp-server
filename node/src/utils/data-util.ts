@@ -30,3 +30,47 @@ export function inferDataType(value: string): "PLAIN" | "NUMBER" | "DATE" {
   }
   return 'PLAIN';
 }
+
+
+export const QUERY_DATA_POLLING_INTERVAL = 2000; // 2 seconds
+export const QUERY_DATA_QUEUE_TIMEOUT = 30 * 1000; // 30 seconds
+export const QUERY_DATA_QUERY_EXECUTION_TIMEOUT = 60 * 1000; // 60 seconds
+export const QUERY_DATA_ROW_LIMIT = 20;
+
+
+export async function pollJobCompletion(
+    bulk: any,
+    jobId: string,
+    statusMessages: Record<string, string>,
+    pollingInterval: number = QUERY_DATA_POLLING_INTERVAL,
+    queueTimeout: number = QUERY_DATA_QUEUE_TIMEOUT,
+    executionTimeout: number = QUERY_DATA_QUERY_EXECUTION_TIMEOUT
+): Promise<string | null> {
+    const startTime = Date.now();
+    let processingStartTime: number | null = null;
+
+    while (true) {
+        const jobDetails = await bulk.getExportJobDetails(jobId);
+        const currentTime = Date.now();
+
+        if (jobDetails.jobCode === '1004') { // JOB COMPLETED
+            break;
+        } else if (jobDetails.jobCode === '1003') { // ERROR OCCURRED
+            return statusMessages.error;
+        } else if (jobDetails.jobCode === '1001') { // JOB NOT INITIATED
+            if (currentTime - startTime > queueTimeout) {
+                return statusMessages.queue_timeout;
+            }
+        } else if (jobDetails.jobCode === '1002') { // JOB IN PROGRESS
+            if (processingStartTime === null) {
+                processingStartTime = currentTime;
+            } else if (currentTime - processingStartTime > executionTimeout) {
+                return statusMessages.execution_timeout;
+            }
+        }
+
+        await new Promise(resolve => setTimeout(resolve, pollingInterval));
+    }
+
+    return null;
+}
