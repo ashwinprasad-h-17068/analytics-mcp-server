@@ -16,7 +16,7 @@ export async function retryWithFallback<T>(
     throw new Error("original_org_id must be passed as a list to allow modification");
   }
   try {
-    return apiCall(originalOrgId[0], ...args);
+    return await apiCall(originalOrgId[0], ...args);
   } catch (error) {
     const apiError = error as ApiError;
     if (apiError.errorCode && (apiError.errorCode === 8084 || apiError.errorCode === 7387)) {
@@ -80,7 +80,18 @@ export function ToolResponse(message: string): MessageContent {
 
 
 export function logAndReturnError(err: unknown, message: string): MessageContent {
-  const error = err instanceof Error ? err : new Error(err != null ? String(err) : 'Unknown error');
-  console.error(error);   
-  return ToolResponse(message + `: ${error.message}`);
+  let errorMessage: string;
+  let errorStack: string | undefined;
+  if (err instanceof Error) {
+    errorMessage = err.message;
+    errorStack = err.stack;
+  } else {
+    try {
+      errorMessage = JSON.stringify(err);
+    } catch {
+      errorMessage = String(err);
+    }
+  }
+  console.error("Error:", errorMessage, errorStack ?? "");
+  return ToolResponse(`${message}: ${errorMessage}`);
 }

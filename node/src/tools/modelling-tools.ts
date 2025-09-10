@@ -20,6 +20,16 @@ export function registerModellingTools(server: ServerInstance) {
             const workspaceId = await org.createWorkspace(workspaceName, configParam);
             return ToolResponse(`Workspace '${workspaceName}' created successfully. Workspace Id: ${workspaceId}`);
         } catch (err) {
+            if (
+                typeof err === "object" &&
+                err !== null &&
+                "errorCode" in err
+            ) {
+                const errorCode = (err as { errorCode: number }).errorCode;
+                if (errorCode === 7101) {
+                return ToolResponse("Workspace name is already taken. Provide an alternate name.");
+                }
+            }
             return logAndReturnError(err, "An error occurred while creating the workspace");
         }
     });
