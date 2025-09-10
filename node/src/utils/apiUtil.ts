@@ -11,15 +11,13 @@ interface Config {
   CLIENTSECRET: string | undefined;
   REFRESHTOKEN: string | undefined;
   ORGID: string | undefined;
-  MCP_DATA_DIR: string | undefined;
 }
 
 export const config: Config = {
   CLIENTID: process.env.ANALYTICS_CLIENT_ID,
   CLIENTSECRET: process.env.ANALYTICS_CLIENT_SECRET,
   REFRESHTOKEN: process.env.ANALYTICS_REFRESH_TOKEN,
-  ORGID: process.env.ANALYTICS_ORG_ID,
-  MCP_DATA_DIR: process.env.ANALYTICS_MCP_DATA_DIR
+  ORGID: process.env.ANALYTICS_ORG_ID
 };
 
 let analyticsClientInstance: AnalyticsClient | null = null;

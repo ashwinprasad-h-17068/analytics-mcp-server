@@ -23,9 +23,11 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.3",
+    "axios": "^1.11.0",
+    "csv-parser": "^3.2.0",
+    "dedent": "^1.6.0",
     "dotenv": "^17.0.1",
-    "request": "^2.88.2",
-    "dedent": "^1.6.0"
+    "request": "^2.88.2"
   },
   "files": [
     "dist"

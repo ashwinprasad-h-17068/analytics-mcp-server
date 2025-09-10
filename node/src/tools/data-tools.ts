@@ -158,7 +158,7 @@ export function registerDataTools(server: ServerInstance) {
                                 }
                             });
 
-                            resolve(ToolResponse(`Successfully analyzed CSV file structure at: ${file_path}`));
+                            resolve(ToolResponse(`Successfully analyzed CSV file structure at: ${file_path}: ${JSON.stringify(structure)}`));
                         })
                         .on('error', (error: Error) => {
                             reject(logAndReturnError(error, `An error occurred while analyzing the CSV file structure`));
@@ -187,7 +187,7 @@ export function registerDataTools(server: ServerInstance) {
                             structure[column] = 'TEXT';
                         }
                     }
-                    return ToolResponse(`Successfully analyzed JSON file structure at: ${file_path}, structure: ` + structure);
+                    return ToolResponse(`Successfully analyzed JSON file structure at: ${file_path}, structure: ` + JSON.stringify(structure));
                 } else {
                     return ToolResponse("Invalid JSON format. Expected a list of objects.");
                 }
@@ -235,13 +235,6 @@ export function registerDataTools(server: ServerInstance) {
                 const bulk = analyticsClient.getBulkInstance(orgId || "", workspace);
 
                 let fullPath = response_path;
-                if (config.MCP_DATA_DIR) {
-                    fullPath = path.join(config.MCP_DATA_DIR, response_path);
-                    const dir = path.dirname(fullPath);
-                    if (!fs.existsSync(dir)) {
-                        fs.mkdirSync(dir, { recursive: true });
-                    }
-                }
 
                 try {
                     await bulk.exportData(view, response_format, fullPath);
@@ -302,7 +295,7 @@ export function registerDataTools(server: ServerInstance) {
             const path = require('path');
             const axios = require('axios');
             const url = require('url');
-            const downloadDir = config.MCP_DATA_DIR || '/tmp';
+            const downloadDir = '/tmp';
             fs.mkdirSync(downloadDir, { recursive: true });
             const parsedUrl = new URL(file_url);
             let filename = path.basename(parsedUrl.pathname);
