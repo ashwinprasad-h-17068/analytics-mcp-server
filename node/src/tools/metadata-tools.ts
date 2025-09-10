@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { ServerInstance } from "../common";
 import { getAnalyticsClient, config } from '../utils/apiUtil';
 import { retryWithFallback, ToolResponse, logAndReturnError } from "../utils/common";
-
+import dedent from "dedent";
 
 const filterAndLimitWorkspaces = (workspaces: any[], filter: string | undefined, isOwned: boolean, limit: number) => {
   if (!workspaces || workspaces.length === 0) {
@@ -58,7 +58,7 @@ async function getViews(
       ): Promise<View[] | string> {
         const analyticsClient = getAnalyticsClient();
         const workspace = analyticsClient.getWorkspaceInstance(orgId, workspaceId);
-
+        allowedViewTypesIds = filterValidNumbers(allowedViewTypesIds,[0,2,3,4,6,7])
         let conf: GetViewsConfig = fromRelevantViewsTool
           ? { viewTypes: allowedViewTypesIds }
           : {
@@ -88,6 +88,11 @@ Use the search_views() tool with a natural language query to get relevant views 
         return viewList;
       }
 
+
+function filterValidNumbers(input: number[], validNumbers: number[]): number[] {
+  const validSet = new Set(validNumbers); // faster lookup than array.includes
+  return input.filter(num => validSet.has(num));
+}
 
 export function registerMetaDataTools(server: ServerInstance) {
 
@@ -197,25 +202,36 @@ export function registerMetaDataTools(server: ServerInstance) {
   server.registerTool("search_views",
   {
     description: `
-    <use_case>
-      1) Searches for views in a workspace using either contains string name matching or natural language query via Retrieval-Augmented Generation (RAG).
-      2) Use this when you need to find specific views or views relevant to a question.
-    </use_case>
+    use_case:
+    1) Searches for views in a workspace using either contains string name matching or natural language query via Retrieval-Augmented Generation (RAG).
+    2) Use this when you need to find specific views or views relevant to a question.
+    
+    important_notes:
+    - If view_contains_str is provided, performs simple string matching on view names.
+    - If view_contains_str is None and natural_language_query is provided, performs intelligent RAG-based search using natural language.
+    - If both view_contains_str and natural_language_query are provided, view_contains_str takes precedence and RAG search is not performed.
+    - If both are None, returns views without filtering (may error if too many).
+    - If not specified explicitly, uses [0, 6] as default value for allowedViewTypesIds (Table and Query Table).
+    
+    arguments:
+    - workspaceId: The ID of the workspace to search in.
+    - natural_language_query: Natural language query for intelligent search. Ignored if view_contains_str is provided.
+    - view_contains_str: String to filter views by name matching. Takes precedence over natural_language_query.
+    - allowedViewTypesIds: Optional array of view type IDs to filter results. It should be an array of integers. Different types of views available in zoho analytics are:
+      (view type_id, view_type_name)
+      0 - Table: A standard table
+      2 - Chart: A graphical representation of data
+      3 - Pivot Table: A table that summarizes data in a multidimensional format
+      4 - Summary View: A view that provides a simple tabular summary of your data with aggregate functions applied
+      6 - Query Table: A derived table created from a custom SQL query
+      7 - Dashboard: A collection of visualizations and reports
+    - orgId: Organization ID. Defaults to config value if not provided.
 
-    <important_notes>
-      - If view_contains_str is provided, performs simple string matching on view names.
-      - If view_contains_str is None and natural_language_query is provided, performs intelligent RAG-based search using natural language.
-      - If both view_contains_str and natural_language_query are provided, view_contains_str takes precedence and RAG search is not performed.
-      - If both are None, returns views without filtering (may error if too many).
-      - If not specified explicitly, uses [0, 6] as default allowedViewTypesIds (Table and Query Table).
-    </important_notes>
-
-    <returns>
-      A JSON stringified array of views matching the criteria or an error message string.
-    </returns>
+    returns:
+    - A JSON stringified array of views matching the criteria or an error message string.
     `,
     inputSchema: {
-      workspaceId: z.string().describe("The ID of the workspace to search in."),
+      workspaceId: z.string(),
       natural_language_query: z.string().optional(),
       view_contains_str: z.string().optional(),
       allowedViewTypesIds: z.array(z.number()).optional(),
@@ -227,18 +243,18 @@ export function registerMetaDataTools(server: ServerInstance) {
       if (!orgId) {
         orgId = config.ORGID || "";
       }
-      return await retryWithFallback([orgId], workspaceId, "WORKSPACE", async (orgId, workspace, natLangQuery, view_str, allowedTypes) => {
+      return await retryWithFallback([orgId], workspaceId, "WORKSPACE", async (orgId, workspace, natLangQuery, view_str, allowedViewTypesIds) => {
         if (
           (view_str && view_str.trim() !== "") ||
           !natLangQuery ||
           natLangQuery.trim() === ""
           ) {
-          const views = await getViews(orgId, workspace, allowedTypes ?? [0, 6], view_str, false);
+          const views = await getViews(orgId, workspace, allowedViewTypesIds ?? [0, 6], view_str, false);
           return ToolResponse(typeof views === "string" ? views : JSON.stringify(views));
         }
 
         // RAG search path
-        const initialViews = await getViews(orgId, workspace, [0, 6], undefined, true);
+        const initialViews = await getViews(orgId, workspace, allowedViewTypesIds ?? [0,6], undefined, true);
 
         if (typeof initialViews === "string" || !Array.isArray(initialViews) || initialViews.length === 0) {
           return ToolResponse("No views found in the workspace.");
