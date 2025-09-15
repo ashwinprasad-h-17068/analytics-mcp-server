@@ -1,5 +1,4 @@
 import AnalyticsClient from '../AnalyticsClient';
-import path from 'path';
 
 interface Config {
   CLIENTID: string | undefined;
@@ -21,11 +20,25 @@ export const getAnalyticsClient = (): AnalyticsClient => {
     if (!config.CLIENTID || !config.CLIENTSECRET || !config.REFRESHTOKEN) {
       throw new Error('Missing required environment variables for AnalyticsClient');
     }
-    analyticsClientInstance = new AnalyticsClient(
-      config.CLIENTID,
-      config.CLIENTSECRET,
-      config.REFRESHTOKEN
-    );
+
+    const accountURI : string | undefined = process.env.ACCOUNTS_SERVER_URL;
+    const analyticsURI : string | undefined = process.env.ANALYTICS_SERVER_URL;
+
+    if (accountURI && analyticsURI) {
+      analyticsClientInstance = new AnalyticsClient(
+        config.CLIENTID,
+        config.CLIENTSECRET,
+        config.REFRESHTOKEN,
+        accountURI,
+        analyticsURI
+      );
+    } else {
+      analyticsClientInstance = new AnalyticsClient(
+        config.CLIENTID,
+        config.CLIENTSECRET,
+        config.REFRESHTOKEN
+      );
+    }
   }
   return analyticsClientInstance;
 };

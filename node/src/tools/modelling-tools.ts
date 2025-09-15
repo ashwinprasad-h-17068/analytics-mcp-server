@@ -111,20 +111,18 @@ export function registerModellingTools(server: ServerInstance) {
     server.registerTool("create_chart_report",
     {
     description: dedent`
-    Create a chart report in the specified workspace for a table in Zoho Analytics.
-
-    1)Use Cases:
+    1.Use Cases:
     - Create a chart report in the specified workspace for a table in Zoho Analytics.
     - Use this to generate visual representations of data using bar, line, pie, scatter, or bubble charts.
 
-    2)Important Notes:
+    2.Important Notes:
     - A chart is a report that visually represents data from a table or multiple tables.
     - If y-axis operation is "actual", only "scatter" chart is allowed. For all other chart types, use "sum" for numeric columns and "count" for string columns in y-axis.
     - Charts can include filters to narrow down the dataset.
     - A chart can be created over columns from the same table or from other tables with which a relationship is defined.
     - For x-axis operations for numeric columns, use "measure" or "dimension" instead of "actual", depending upon the type of the numeric column.
     
-    3)Arguments:
+    3.Arguments:
     - workspace_id (str): ID of the workspace to create the chart in.
     - table_name (str): The base table name for the chart.
     - chart_name (str): Desired name for the chart report.
@@ -138,7 +136,7 @@ export function registerModellingTools(server: ServerInstance) {
     - filters (list[dict] | None): Optional. Filter definitions per <filters_args>.
     - org_id (str | None): The ID of the organization to which the workspace belongs to. If not provided, it defaults to the organization ID from the configuration.
     
-        3.1)Filter Arguments:
+        3.1.Filter Arguments:
         - tableName (str): The name of the table containing the column to filter.
         - columnName (str): The name of the column to filter.
         - operation (str): Specifies the function applied to the specified column used in the filter. The accepted functions differ based on the data type of the column.
@@ -153,7 +151,7 @@ export function registerModellingTools(server: ServerInstance) {
             - For ranking: "top 10", "bottom 5"
         - exclude (bool): Whether to exclude or include the filtered values. Default is False.
 
-    4)Returns:
+    4.Returns:
     - str: Chart creation status or error message.
     `,
     inputSchema: {
@@ -396,12 +394,12 @@ export function registerModellingTools(server: ServerInstance) {
 
     server.registerTool("create_pivot_report",
     {
-        description: `
-    Create a pivot table report in the specified workspace and table in Zoho Analytics.
+        description: dedent`
+    1. use_cases:
+    - Create a pivot table report in the specified workspace and table in Zoho Analytics.
+    - Use this when you need multidimensional data summaries by defining rows, columns, and data fields.
 
-    Use this when you need multidimensional data summaries by defining rows, columns, and data fields.
-
-    Important Notes:
+    2. Important Notes:
     - All pivot details (row, column, data) are optional individually but at least one of them must be provided and valid.
     - Allowed operations:
         - String columns: actual, count, distinctCount
@@ -411,6 +409,32 @@ export function registerModellingTools(server: ServerInstance) {
     - Lookup fields from other tables can be used if lookup is already defined.
     - For row and column fields, prefer non-aggregate operations like actual, measure or dimension depending on the data type. 
     For data fields, prefer aggregate operations like sum, count, etc.
+
+    3. arguments:
+    - workspace_id (str): ID of the workspace to create the report in.
+    - table_name (str): Base table name for the report.
+    - report_name (str): Desired name of the pivot report.
+    - pivot_details (dict): Contains:
+        - row (optional(list[dict])): Each dict must have 'columnName' and 'tableName' and 'operation'.
+        - column (optional(list[dict])): Same structure as row.
+        - data (optional(list[dict])): same structure as row.
+    - filters (list[dict] | None): Optional filters to restrict data scope. Filter definitions per <filters_args>.
+    - org_id (str | None): The ID of the organization to which the workspace belongs to. If not provided, it defaults to the organization ID from the configuration.
+
+        3.1. filters_args:
+        - tableName (str): The name of the table containing the column to filter.
+        - columnName (str): The name of the column to filter.
+        - operation (str): Specifies the function applied to the specified column used in the filter. The accepted functions differ based on the data type of the column.
+            Date: actual, seasonal, relative
+            String: actual, count, distinctCount
+            Number: sum, average, min, max
+        - filterType (str): The type of filter to apply. Accepted values: individualValues, range, ranking, rankingPct, dateRange, year, quarterYear, monthYear, weekYear, quarter, month, week, weekDay, day, hour, dateTime
+        - values (list): The values to filter on.
+            Example:
+            - For individualValues: "value1", "value2"
+            - For range: "10 to 20"
+            - For ranking: "top 10", "bottom 5"
+        - exclude (bool): Whether to exclude or include the filtered values. Default is False.
         `,
         inputSchema: {
         workspaceId: z.string(),

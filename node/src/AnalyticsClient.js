@@ -4,8 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const querystring = require('querystring');
 const request = require('request');
-const analyticsURI = "analyticsapi.zoho.com";
-const accountsURI = "accounts.zoho.com";
 const clientVersion = "2.6.0";
 
 
@@ -17,6 +15,14 @@ class AnalyticsClient
         this.clientSecret = clientSecret;
         this.refreshToken = refreshToken;
         this.accessToken = null;
+        this.accountsURI = "accounts.zoho.com";
+        this.analyticsURI = "analyticsapi.zoho.com";
+    }
+
+    constructor(clientId, clientSecret, refreshToken, analyticsURI, accountsURI) {
+        this.constructor(clientId, clientSecret, refreshToken);
+        this.analyticsURI = analyticsURI;
+        this.accountsURI = accountsURI;
     }
 
     /**
@@ -237,7 +243,7 @@ class AnalyticsClient
             config.isLastBatch = (i == (totalBatchCount - 1))? "true" : "false"
             
             var encodedConfig = encodeURIComponent(JSON.stringify(config));
-            var url = 'https://'+analyticsURI + uriPath + "?" + "CONFIG" + "=" + encodedConfig;
+            var url = 'https://'+this.analyticsURI + uriPath + "?" + "CONFIG" + "=" + encodedConfig;
 
             if(this.accessToken == null)
             {
@@ -329,7 +335,7 @@ class AnalyticsClient
         var configParam = "CONFIG" + "=" + encodedConfig;
         uriPath = uriPath + "?" + configParam;
       }
-      var url = 'https://'+analyticsURI+uriPath;
+      var url = 'https://'+this.analyticsURI+uriPath;
 
       if(data !== null)
       {
@@ -434,7 +440,7 @@ class AnalyticsClient
 
 
     return new Promise(function(resolve, reject) {
-        var url = 'https://'+analyticsURI+uriPath;
+        var url = 'https://'+this.analyticsURI+uriPath;
         var req = request.get({url:url,encoding: null,headers:header,secureProtocol: 'TLSv1_2_method'}, (err, resp, body)=> {
         if (err) 
         {
@@ -496,7 +502,7 @@ class AnalyticsClient
       }
 
       var options = {
-        host: analyticsURI,
+        host: this.analyticsURI,
         path: uriPath,
         headers: header,
         method: reqMethod,
@@ -555,7 +561,7 @@ class AnalyticsClient
 
         var encodedParams = querystring.stringify(oauthinfo);
         var options = {
-          host: accountsURI,
+          host: this.accountsURI,
           path: '/oauth/v2/token',
           headers: {
           'Content-Type': 'application/x-www-form-urlencoded',

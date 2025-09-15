@@ -25,6 +25,8 @@ declare module './AnalyticsClient' {
 
         constructor(clientId: string, clientSecret: string, refreshToken: string);
 
+        constructor(clientId: string, clientSecret: string, refreshToken: string, analyticsURI: string, accountsURI: string);
+
         /**
          * Returns list of all accessible organizations.
          * @returns {Promise<JSONArray>} Organization list.
