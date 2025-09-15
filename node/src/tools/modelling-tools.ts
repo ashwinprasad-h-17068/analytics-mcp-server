@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ServerInstance } from "../common";
 import {getAnalyticsClient, config } from '../utils/apiUtil';
 import { retryWithFallback, ToolResponse, logAndReturnError } from "../utils/common";
+import dedent from "dedent";
 
 export function registerModellingTools(server: ServerInstance) {
 
@@ -72,10 +73,10 @@ export function registerModellingTools(server: ServerInstance) {
     // {
     //     description: "Create an aggregate formula in the specified table of the workspace",
     //     inputSchema: {
-    //     workspace_id: z.string().describe("The ID of the workspace"),
-    //     table_id: z.string().describe("The ID of the table"),
-    //     expression: z.string().describe("The expression for the aggregate formula"),
-    //     formula_name: z.string().describe("The name of the aggregate formula")
+    //     workspace_id: z.string(),
+    //     table_id: z.string(),
+    //     expression: z.string(),
+    //     formula_name: z.string()
     //     }
     // },
     // async ({ workspace_id, table_id, expression, formula_name }) => {
@@ -109,78 +110,94 @@ export function registerModellingTools(server: ServerInstance) {
 
     server.registerTool("create_chart_report",
     {
-    description: `
-Create a chart report in the specified workspace for a table in Zoho Analytics.
+    description: dedent`
+    Create a chart report in the specified workspace for a table in Zoho Analytics.
 
-Use Cases:
-- Create a chart report in the specified workspace for a table in Zoho Analytics.
-- Use this to generate visual representations of data using bar, line, pie, scatter, or bubble charts.
+    1)Use Cases:
+    - Create a chart report in the specified workspace for a table in Zoho Analytics.
+    - Use this to generate visual representations of data using bar, line, pie, scatter, or bubble charts.
 
-Important Notes:
-- A chart is a report that visually represents data from a table or multiple tables.
-- If y-axis operation is "actual", only "scatter" chart is allowed. For all other chart types, use "sum" for numeric columns and "count" for string columns in y-axis.
-- Charts can include filters to narrow down the dataset.
-- A chart can be created over columns from the same table or from other tables with which a relationship is defined.
-- For x-axis operations for numeric columns, use "measure" or "dimension" instead of "actual", depending upon the type of the numeric column.
+    2)Important Notes:
+    - A chart is a report that visually represents data from a table or multiple tables.
+    - If y-axis operation is "actual", only "scatter" chart is allowed. For all other chart types, use "sum" for numeric columns and "count" for string columns in y-axis.
+    - Charts can include filters to narrow down the dataset.
+    - A chart can be created over columns from the same table or from other tables with which a relationship is defined.
+    - For x-axis operations for numeric columns, use "measure" or "dimension" instead of "actual", depending upon the type of the numeric column.
+    
+    3)Arguments:
+    - workspace_id (str): ID of the workspace to create the chart in.
+    - table_name (str): The base table name for the chart.
+    - chart_name (str): Desired name for the chart report.
+    - chart_details (dict): Details of the chart including:
+        - chartType (str): One of ["bar", "line", "pie", "scatter", "bubble"]
+        - x_axis (dict):
+            - columnName (str)
+            - operation (str): (strings) actual, count, distinctCount | (numbers) sum, average, min, max, measure, dimension, count, distinctCount  | (dates) year, month, week, fullDate, dateTime, range, count, distinctCount. 
+            - tableName (optional [str]): If the column belongs to another table with which a relationship is defined with base table, provide the tableName.
+        - y_axis (dict): Same structure as x_axis
+    - filters (list[dict] | None): Optional. Filter definitions per <filters_args>.
+    - org_id (str | None): The ID of the organization to which the workspace belongs to. If not provided, it defaults to the organization ID from the configuration.
+    
+        3.1)Filter Arguments:
+        - tableName (str): The name of the table containing the column to filter.
+        - columnName (str): The name of the column to filter.
+        - operation (str): Specifies the function applied to the specified column used in the filter. The accepted functions differ based on the data type of the column.
+            Date: year, quarterYear, monthYear, weekYear, fullDate, dateTime, range, quarter, month, week, weekDay, day, hour, count, distinctCount
+            String: actual, count, distinctCount
+            Number: measure, dimension, sum, average, min, max, count, distinctCount
+        - filterType (str): The type of filter to apply. Accepted values: individualValues, range, ranking, rankingPct, dateRange, year, quarterYear, monthYear, weekYear, quarter, month, week, weekDay, day, hour, dateTime
+        - values (list): The values to filter on.
+            Example:
+            - For individualValues: "value1", "value2"
+            - For range: "10 to 20", "50 and above"
+            - For ranking: "top 10", "bottom 5"
+        - exclude (bool): Whether to exclude or include the filtered values. Default is False.
+
+    4)Returns:
+    - str: Chart creation status or error message.
     `,
     inputSchema: {
-      workspace_id: z.string().describe("ID of the workspace to create the chart in."),
-      table_name: z.string().describe("The base table name for the chart."),
-      chart_name: z.string().describe("Desired name for the chart report."),
+      workspace_id: z.string(),
+      table_name: z.string(),
+      chart_name: z.string(),
       chart_details: z
         .object({
           chartType: z
-            .enum(["bar", "line", "pie", "scatter", "bubble"])
-            .describe("Type of chart."),
+            .enum(["bar", "line", "pie", "scatter", "bubble"]),
           x_axis: z
             .object({
-              columnName: z.string().describe("Name of the column for the x-axis."),
-              operation: z.string().describe("Operation to perform on the column."),
+              columnName: z.string(),
+              operation: z.string(),
               tableName: z
                 .string()
                 .optional()
-                .describe("If column belongs to another related table, specify the table name."),
-            })
-            .describe("X-axis column details."),
+            }),
           y_axis: z
             .object({
-              columnName: z.string().describe("Name of the column for the y-axis."),
-              operation: z.string().describe("Operation to perform on the column."),
+              columnName: z.string(),
+              operation: z.string(),
               tableName: z
                 .string()
-                .optional()
-                .describe("If column belongs to another related table, specify the table name."),
-            })
-            .describe("Y-axis column details."),
-        })
-        .describe("Chart configuration details."),
+                .optional(),
+            }),
+        }),
       filters: z
         .array(
           z.object({
-            tableName: z.string().describe("Table containing the column to filter."),
-            columnName: z.string().describe("Column to filter."),
+            tableName: z.string(),
+            columnName: z.string(),
             operation: z
-              .string()
-              .describe(
-                "Function applied to the column. Accepted functions differ by data type."
-              ),
+              .string(),
             filterType: z
-              .string()
-              .describe(
-                "Type of filter. e.g. individualValues, range, ranking, dateRange, etc."
-              ),
-            values: z.array(z.string()).describe("Values to filter on."),
-            exclude: z.boolean().describe("Whether to exclude or include the filtered values."),
+              .string(),
+            values: z.array(z.string()),
+            exclude: z.boolean(),
           })
         )
-        .optional()
-        .describe("List of filters to apply on the chart."),
+        .optional(),
       orgId: z
         .string()
-        .optional()
-        .describe(
-          "Organization ID to which the workspace belongs. Defaults to config value if not provided."
-        ),
+        .optional(),
     },
   },
   async ({
@@ -260,20 +277,62 @@ Important Notes:
 
     server.registerTool("create_summary_report",
     {
-        description: "Create a summary report in the specified workspace and table in Zoho Analytics.",
+        description: dedent`
+        1. use_case:
+        - Create a summary report in the specified workspace and table in Zoho Analytics.
+        - Use this to generate grouped aggregate reports, ideal for quick summaries with group-by and aggregate logic.
+        - Creates a summary table that groups data by specified columns and applies aggregate functions.
+        
+        2. important_notes:
+        - Do NOT use "actual" operation for numeric columns in aggregate. Use "sum" instead.
+        - You can use lookup columns from other tables if relationships are already defined.
+
+        3. arguments:
+        - workspace_id (str): The ID of the workspace to create the Summary report in.
+        - table_name (str): The name of the base table for the summary report.
+        - report_name (str): The name for the Summary to be created.
+        - summary_details (dict): Contains:
+            - group_by (list[dict]): Each dict must have:
+                - columnName (str)
+                - tableName (str)
+            - aggregate (list[dict]): Each dict must have:
+                - columnName (str)
+                - operation (str): sum, average, count, min, max, etc.
+                - tableName (str): Need to be provided if the column belongs to another table with which a lookup is defined.
+        - filters (list[dict] | None): Optional filters. See <filters_args> in create_chart tool.
+        - org_id (str | None): The ID of the organization to which the workspace belongs to. If not provided, it defaults to the organization ID from the configuration.
+        
+            3.1. filter_args:
+            - tableName (str): The name of the table containing the column to filter.
+            - columnName (str): The name of the column to filter.
+            - operation (str): Specifies the function applied to the specified column used in the filter. The accepted functions differ based on the data type of the column.
+                Date: actual, seasonal, relative
+                String: actual, count, distinctCount
+                Number: measure, dimension, sum, average, min, max, count, distinctCount
+            - filterType (str): The type of filter to apply. Accepted values: individualValues, range, ranking, rankingPct, dateRange, year, quarterYear, monthYear, weekYear, quarter, month, week, weekDay, day, hour, dateTime
+            - values (list): The values to filter on.
+                Example:
+                - For individualValues: "value1", "value2"
+                - For range: "10 to 20", "50 and above"
+                - For ranking: "top 10", "bottom 5"
+            - exclude (bool): Whether to exclude or include the filtered values. Default is False.
+        
+        4.returns:
+        - str: Chart creation status or error message.
+        `,
         inputSchema: {
-            workspaceId: z.string().describe("ID of the workspace where the Summary report will be created"),
-        tableName: z.string().describe("Base table name for the summary report"),
-        reportName: z.string().describe("Name for the Summary report"),
+            workspaceId: z.string(),
+        tableName: z.string(),
+        reportName: z.string(),
         summaryDetails: z.object({
             group_by: z.array(z.object({
             columnName: z.string(),
             tableName: z.string()
             })).nonempty(),
             aggregate: z.array(z.object({
-            columnName: z.string(),
-            operation: z.string(), // could restrict to union type: "sum" | "average" | ...
-            tableName: z.string()
+                columnName: z.string(),
+                operation: z.string(),
+                tableName: z.string()
             })).nonempty()
         }),
         filters: z.array(z.object({
@@ -354,9 +413,9 @@ Important Notes:
     For data fields, prefer aggregate operations like sum, count, etc.
         `,
         inputSchema: {
-        workspaceId: z.string().describe("ID of the workspace to create the report in."),
-        tableName: z.string().describe("Base table name for the report."),
-        reportName: z.string().describe("Desired name of the pivot report."),
+        workspaceId: z.string(),
+        tableName: z.string(),
+        reportName: z.string(),
         pivotDetails: z.object({
             row: z.array(z.object({
             columnName: z.string(),
