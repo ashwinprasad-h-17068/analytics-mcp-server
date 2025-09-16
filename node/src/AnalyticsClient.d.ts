@@ -23,9 +23,7 @@ declare module './AnalyticsClient' {
         refreshToken: string;
         accessToken: string | null;
 
-        constructor(clientId: string, clientSecret: string, refreshToken: string);
-
-        constructor(clientId: string, clientSecret: string, refreshToken: string, analyticsURI: string, accountsURI: string);
+        constructor(clientId: string, clientSecret: string, refreshToken: string, analyticsURI?: string, accountsURI?: string);
 
         /**
          * Returns list of all accessible organizations.

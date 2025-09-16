@@ -9,18 +9,12 @@ const clientVersion = "2.6.0";
 
 class AnalyticsClient
 {
-    constructor(clientId, clientSecret, refreshToken)
-    {
+
+    constructor(clientId, clientSecret, refreshToken, analyticsURI = "analyticsapi.zoho.com", accountsURI = "accounts.zoho.com") {
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.refreshToken = refreshToken;
         this.accessToken = null;
-        this.accountsURI = "accounts.zoho.com";
-        this.analyticsURI = "analyticsapi.zoho.com";
-    }
-
-    constructor(clientId, clientSecret, refreshToken, analyticsURI, accountsURI) {
-        this.constructor(clientId, clientSecret, refreshToken);
         this.analyticsURI = analyticsURI;
         this.accountsURI = accountsURI;
     }
@@ -437,10 +431,8 @@ class AnalyticsClient
         var configParam = "CONFIG" + "=" + encodedConfig;
         uriPath = uriPath + "?" + configParam;
       }
-
-
+      const url = 'https://' + this.analyticsURI + uriPath;
     return new Promise(function(resolve, reject) {
-        var url = 'https://'+this.analyticsURI+uriPath;
         var req = request.get({url:url,encoding: null,headers:header,secureProtocol: 'TLSv1_2_method'}, (err, resp, body)=> {
         if (err) 
         {

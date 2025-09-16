@@ -164,7 +164,6 @@ export function registerMetaDataTools(server: ServerInstance) {
       try {
           const analyticsClient = getAnalyticsClient();
           let viewDetails = await analyticsClient.getViewDetails(view_id, { withInvolvedMetaInfo: true });
-
           if (viewDetails) {
               if ('orgId' in viewDetails) {
                   delete (viewDetails as any).orgId;

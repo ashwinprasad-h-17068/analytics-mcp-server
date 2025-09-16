@@ -130,7 +130,10 @@ export function registerModellingTools(server: ServerInstance) {
         - chartType (str): One of ["bar", "line", "pie", "scatter", "bubble"]
         - x_axis (dict):
             - columnName (str)
-            - operation (str): (strings) actual, count, distinctCount | (numbers) sum, average, min, max, measure, dimension, count, distinctCount  | (dates) year, month, week, fullDate, dateTime, range, count, distinctCount. 
+            - operation (str): 
+                For string:- actual, count, distinctCount
+                For number:- sum, average, min, max, measure, dimension, count, distinctCount
+                For dates:- year, month, week, fullDate, dateTime, range, count, distinctCount
             - tableName (optional [str]): If the column belongs to another table with which a relationship is defined with base table, provide the tableName.
         - y_axis (dict): Same structure as x_axis
     - filters (list[dict] | None): Optional. Filter definitions per <filters_args>.
@@ -267,6 +270,19 @@ export function registerModellingTools(server: ServerInstance) {
     } catch (error: any) {
         if (typeof error.message === "string" && error.message.includes("Invalid input") && error.message.includes("operation") && error.message.includes("actual")) {
             return logAndReturnError("Invalid operation 'actual' for numeric column. Use 'sum' or 'count' instead.", "Chart creation error");
+        }
+        if ("errorMessage" in error && "errorCode" in error){
+            const { errorMessage, errorCode } = error as { errorMessage: string; errorCode: number };
+            if (errorCode === 8166) {
+                let responseStr = errorMessage;
+                responseStr += dedent`
+                Supported operations for columns of different types:
+                For string:- actual, count, distinctCount
+                For number:- sum, average, min, max, measure, dimension, count, distinctCount
+                For dates:- year, month, week, fullDate, dateTime, range, count, distinctCount
+                `
+                return ToolResponse(responseStr);
+            }
         }
         return logAndReturnError(error, "An error occurred while creating the chart report");
     }

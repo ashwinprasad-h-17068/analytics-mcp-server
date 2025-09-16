@@ -208,7 +208,7 @@ export function registerDataTools(server: ServerInstance) {
         - Export an object from the workspace in the specified format. These objects can be tables, charts, or dashboards.
         
         important_notes:
-        - Mostly prefer html for charts and dashboards, and csv for tables.
+        - Mostly prefer html for charts, pdf dashboards, and csv for tables.
         `,
         inputSchema: {
             workspaceId: z.string().describe("The ID of the workspace from which to export objects"),
@@ -230,12 +230,20 @@ export function registerDataTools(server: ServerInstance) {
                         `Invalid response file format. Supported formats are ${JSON.stringify(supportedFormats)}.`
                     );
                 }
-
+                interface ViewDetails {
+                    viewType: string;
+                    isTabbedDashboard?: boolean;
+                }
                 const analyticsClient = getAnalyticsClient();
+                let viewDetails : ViewDetails  = await analyticsClient.getViewDetails(view_id, { withInvolvedMetaInfo: true }) as ViewDetails;                
+                if (viewDetails.viewType == "Dashboard" && viewDetails.isTabbedDashboard) {
+                    const extension = response_path.split('.').pop();
+                    if (extension?.toLowerCase() !== 'zip') {
+                        response_path = response_path.replace(/\.[^/.]+$/, ".zip");
+                    }
+                }
                 const bulk = analyticsClient.getBulkInstance(orgId || "", workspace);
-
                 let fullPath = response_path;
-
                 try {
                     await bulk.exportData(view, response_format, fullPath);
                 } catch (e: any) {
@@ -248,13 +256,11 @@ export function registerDataTools(server: ServerInstance) {
                         }
 
                         const jobId = await bulk.initiateBulkExport(view, "pdf", { dashboardLayout: 1 });
-
                         const statusMessages: Record<string, string> = {
                             error: "Some internal error ocurred. Please try again later.",
                             queue_timeout: "Dashboard export Job accepted, but queue processing is slow. Please try again later.",
                             execution_timeout: "Dashboard is taking too long to export, maybe due to the complexity. Please try again later."
                         };
-
                         const errorMessage = await pollJobCompletion(bulk, jobId, statusMessages);
                         if (errorMessage) {
                             return ToolResponse(errorMessage);

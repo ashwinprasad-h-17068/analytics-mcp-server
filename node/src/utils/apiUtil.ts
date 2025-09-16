@@ -29,8 +29,8 @@ export const getAnalyticsClient = (): AnalyticsClient => {
         config.CLIENTID,
         config.CLIENTSECRET,
         config.REFRESHTOKEN,
-        accountURI,
-        analyticsURI
+        analyticsURI,
+        accountURI
       );
     } else {
       analyticsClientInstance = new AnalyticsClient(
