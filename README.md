@@ -170,7 +170,7 @@ To configure the Zoho Analytics MCP server with Visual Studio Code:
 
 
 ```json
-"mcp": {
+{
   "servers": {
     "zoho_analytics_mcp_server": {
       "type": "stdio",
