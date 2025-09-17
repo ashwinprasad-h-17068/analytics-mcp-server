@@ -306,9 +306,14 @@ export function registerModellingTools(server: ServerInstance) {
         - table_name (str): The name of the base table for the summary report.
         - report_name (str): The name for the Summary to be created.
         - summary_details (dict): Contains:
-            - group_by (list[dict]): Each dict must have:
+            - group_by (list[dict]):
+                Each dict must have:
                 - columnName (str)
                 - tableName (str)
+                - operation (str): Below are the valid operation types based on datatypes
+                    Date: year, quarterYear, monthYear, weekYear, fullDate, dateTime, range, quarter, month, week, weekDay, day, hour, count, distinctCount
+                    String: actual, count, distinctCount
+                    Number: measure, dimension, sum, average, min, max, count, distinctCount
             - aggregate (list[dict]): Each dict must have:
                 - columnName (str)
                 - operation (str): sum, average, count, min, max, etc.
@@ -336,28 +341,29 @@ export function registerModellingTools(server: ServerInstance) {
         `,
         inputSchema: {
             workspaceId: z.string(),
-        tableName: z.string(),
-        reportName: z.string(),
-        summaryDetails: z.object({
-            group_by: z.array(z.object({
-            columnName: z.string(),
-            tableName: z.string()
-            })).nonempty(),
-            aggregate: z.array(z.object({
+            tableName: z.string(),
+            reportName: z.string(),
+            summaryDetails: z.object({
+                group_by: z.array(z.object({
+                    columnName: z.string(),
+                    tableName: z.string(),
+                    operation: z.string()
+                })).nonempty(),
+                aggregate: z.array(z.object({
+                    columnName: z.string(),
+                    operation: z.string(),
+                    tableName: z.string()
+                })).nonempty()
+            }),
+            filters: z.array(z.object({
+                tableName: z.string().optional(),
                 columnName: z.string(),
                 operation: z.string(),
-                tableName: z.string()
-            })).nonempty()
-        }),
-        filters: z.array(z.object({
-            tableName: z.string().optional(),
-            columnName: z.string(),
-            operation: z.string(),
-            filterType: z.string(),
-            values: z.array(z.string()),
-            exclude: z.boolean()
-        })).optional(),
-        orgId: z.string().optional()
+                filterType: z.string(),
+                values: z.array(z.string()),
+                exclude: z.boolean()
+            })).optional(),
+            orgId: z.string().optional()
         }
     },
     async ({ workspaceId, tableName, reportName, summaryDetails, filters, orgId }) => {
@@ -373,7 +379,7 @@ export function registerModellingTools(server: ServerInstance) {
                 axisColumns.push({
                     type: "groupBy",
                     columnName: gb.columnName,
-                    operation: "actual",
+                    operation: gb.operation,
                     tableName: gb.tableName
                 });
             }
