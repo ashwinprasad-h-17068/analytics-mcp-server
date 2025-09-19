@@ -1,0 +1,35 @@
+{
+  "name": "zoho-analytics-mcp-server",
+  "version": "1.0.0",
+  "description": "Mcp server implementation for Zoho Analytics",
+  "bin": {
+    "zoho-analytics-mcp-server": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint . --ext .ts",
+    "test": "jest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/node": "^24.0.3",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.3",
+    "axios": "^1.11.0",
+    "csv-parser": "^3.2.0",
+    "dedent": "^1.6.0",
+    "dotenv": "^17.0.1",
+    "request": "^2.88.2"
+  },
+  "files": [
+    "dist"
+  ]
+}
