@@ -21,5 +21,5 @@ registerRowTools(server);
 const transport = new StdioServerTransport();
 (async () => {
   await server.connect(transport);
-  console.log("Zoho Analytics MCP server is running and connected to stdin/stdout::v1.0.3");
+  console.log("Zoho Analytics MCP server is running and connected to stdin/stdout::v1.0.0");
 })();
