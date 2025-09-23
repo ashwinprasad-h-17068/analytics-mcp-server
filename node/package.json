@@ -8,8 +8,7 @@
   "scripts": {
     "build": "tsc",
     "lint": "eslint . --ext .ts",
-    "test": "jest",
-    "prepublishOnly": "npm run build"
+    "test": "jest"
   },
   "keywords": [],
   "author": "",
