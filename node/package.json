@@ -1,6 +1,6 @@
 {
   "name": "zoho-analytics-mcp-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Mcp server implementation for Zoho Analytics",
   "bin": {
     "zoho-analytics-mcp-server": "./dist/index.js"
