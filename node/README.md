@@ -241,51 +241,6 @@ For Claude Desktop, add the following to your MCP configuration file:
 }
 ```
 
-## Building from Source
-
-If you want to build the MCP server from source or need to use a local development version:
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/zoho/analytics-mcp-server
-   cd analytics-mcp-server
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   cd node
-   npm install
-   ```
-
-3. **Build the project:**
-   ```bash
-   npm run build
-   ```
-
-### Using Local Build
-
-To use your local build with an MCP host:
-
-```json
-{
-  "servers": {
-    "zoho_analytics_local": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["/absolute-path-to-zoho-analytics-mcp-server/node/dist/index.js"],
-      "env": {
-        "ANALYTICS_CLIENT_ID": "your-client-id",
-        "ANALYTICS_CLIENT_SECRET": "your-client-secret",
-        "ANALYTICS_REFRESH_TOKEN": "your-refresh-token",
-        "ANALYTICS_ORG_ID": "your-org-id",
-        "ACCOUNTS_SERVER_URL": "<your-accounts-uri>",
-        "ANALYTICS_SERVER_URL": "<your-analytics-uri>"
-      }
-    }
-  }
-}
-```
-
 ## Troubleshooting
 
 ### Common Issues

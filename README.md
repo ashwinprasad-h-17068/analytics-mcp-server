@@ -19,19 +19,6 @@ The Zoho Analytics MCP Server (Beta) implements the Model Context Protocol (MCP)
 **System Requirements**
 To build the Zoho Analytics MCP server from source, you need to have Docker installed on your system. Before setup, please make sure to have `docker` and a `container runtime` installed in your device.
 
-**Build from Source**
-Once the docker is successfully installed to your system, you can build the Zoho Analytics MCP server from source.
-
-```bash
-# Clone the repository
-git clone https://github.com/zoho/analytics-mcp-server.git
-cd analytics-mcp-server/docker/
-
-# Build the Docker image
-docker build -t zohoanalytics/mcp-server:latest .
-```
-
-
 **Pull Docker Image**
 
 If you prefer to use the pre-built Docker image, you can pull it directly from Docker Hub:
