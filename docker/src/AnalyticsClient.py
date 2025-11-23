@@ -5,6 +5,43 @@ import json
 import requests
 import math
 import time
+from abc import ABC, abstractmethod
+from typing import Optional
+
+
+class AuthBase(ABC):
+    is_remote: bool
+
+    @abstractmethod
+    def get_access_token(self) -> str:
+        """Return a valid access token (refreshing it if necessary)."""
+        ...
+
+
+class RemoteClientAuth(AuthBase):
+    """For browser clients: token is provided directly and not refreshed."""
+    def __init__(self, access_token: str):
+        self.is_remote = True
+        self._access_token = access_token
+
+    def get_access_token(self) -> str:
+        return self._access_token
+    
+class LocalClientAuth(AuthBase):
+    """For desktop clients: uses client_id/secret + refresh_token to fetch new access tokens."""
+
+    def __init__(self, client_id: str, client_secret: str, refresh_token: str):
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.refresh_token = refresh_token
+        self._access_token: Optional[str] = None
+        self.is_remote = True
+
+    def get_access_token(self) -> str:
+        if self._access_token is None:
+            self._refresh()
+        return self._access_token
+
 
 class AnalyticsClient:
     """
@@ -14,7 +51,7 @@ class AnalyticsClient:
     CLIENT_VERSION = "2.6.0"
     COMMON_ENCODE_CHAR = "UTF-8"
 
-    def __init__(self, client_id, client_secret, refresh_token):
+    def __init__(self, auth: AuthBase):
         """
         Creates a new C{AnalyticsClient} instance.
         @param client_id: User client id for OAUth
@@ -34,10 +71,27 @@ class AnalyticsClient:
         self.accounts_server_url = "https://accounts.zoho.com"
         self.analytics_server_url = "https://analyticsapi.zoho.com"
 
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.refresh_token = refresh_token
-        self.access_token = None
+        self.auth = auth
+
+        # self.client_id = client_id
+        # self.client_secret = client_secret
+        # self.refresh_token = refresh_token
+        # self.access_token = None
+
+
+    @classmethod
+    def from_access_token(cls, access_token: str) -> "AnalyticsClient":
+        """Factory for remote clients."""
+        return cls(RemoteClientAuth(access_token))
+    
+    @classmethod
+    def from_refresh_token(
+        cls, client_id: str, client_secret: str, refresh_token: str
+    ) -> "AnalyticsClient":
+        """Factory for desktop-style clients."""
+        return cls(LocalClientAuth(client_id, client_secret, refresh_token))
+
+
 
     def get_org_instance(self, org_id):
         """
@@ -2360,7 +2414,7 @@ class AnalyticsClient:
         self.proxy_password = proxy_password
 
     def send_batch_import_api_request(self, request_url, config, request_headers, file_path, batch_size, tool_config):
-        if self.access_token is None:
+        if not self.auth.is_remote and self.access_token is None:
             self.regenerate_analytics_oauth_token()
 
         file_header = open(file_path, 'r').readline()
@@ -2382,7 +2436,7 @@ class AnalyticsClient:
             resp_obj = self.submit_import_request(request_url, config_data, request_headers, self.access_token, files)
 
             if not (str(resp_obj.status_code).startswith("2")):
-                if self.is_oauth_expired(resp_obj):
+                if not self.auth.is_remote and self.is_oauth_expired(resp_obj):
                     self.regenerate_analytics_oauth_token()
                     resp_obj = self.submit_import_request(request_url, config_data, request_headers, self.access_token,
                                                           files)
@@ -2402,7 +2456,7 @@ class AnalyticsClient:
         """
         Internal method to handle HTTP request.
         """
-        if self.access_token == None:
+        if not self.auth.is_remote and self.access_token == None:
             self.regenerate_analytics_oauth_token()
 
         request_url = self.analytics_server_url + request_url
@@ -2424,7 +2478,7 @@ class AnalyticsClient:
         
 
         if not (str(resp_obj.status_code).startswith("2")):
-            if(self.is_oauth_expired(resp_obj)):
+            if not self.auth.is_remote and (self.is_oauth_expired(resp_obj)):
                 self.regenerate_analytics_oauth_token()
                 if bool(data):
                     resp_obj = self.submit_import_request(request_url, config_data, request_headers, self.access_token)
@@ -2481,7 +2535,7 @@ class AnalyticsClient:
         """
         file = open(file_path,"wb")
 
-        if self.access_token == None:
+        if not self.auth.is_remote and self.access_token == None:
             self.regenerate_analytics_oauth_token()
 
         request_url = self.analytics_server_url + request_url
@@ -2493,7 +2547,7 @@ class AnalyticsClient:
 
         if not (str(resp_obj.status_code).startswith("2")):
             resp_obj = response_obj(resp_obj)
-            if(self.is_oauth_expired(resp_obj)):
+            if not self.auth.is_remote and (self.is_oauth_expired(resp_obj)):
                 self.regenerate_analytics_oauth_token()
                 resp_obj = self.submit_export_request(request_url, config_data, request_headers, self.access_token)
                 if not (str(resp_obj.status_code).startswith("2")):
@@ -2541,9 +2595,9 @@ class AnalyticsClient:
         """
         Internal method to handle HTTP request.
         """
-        if self.access_token == None:
+        if not self.auth.is_remote and self.access_token == None:
             self.regenerate_analytics_oauth_token()
-
+            
         request_url = self.analytics_server_url + request_url
         config_data = None
         if bool(config):
@@ -2552,7 +2606,7 @@ class AnalyticsClient:
         resp_obj = self.submit_request(request_method, request_url, config_data, request_headers, self.access_token)
 
         if not (str(resp_obj.status_code).startswith("2")):
-            if(self.is_oauth_expired(resp_obj)):
+            if not self.auth.is_remote and (self.is_oauth_expired(resp_obj)):
                 self.regenerate_analytics_oauth_token()
                 resp_obj = self.submit_request(request_method, request_url, config_data, request_headers, self.access_token)
                 if not (str(resp_obj.status_code).startswith("2")):

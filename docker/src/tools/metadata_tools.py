@@ -1,5 +1,5 @@
 from mcp_instance import mcp
-from config import Config, get_analytics_client_instance
+from config import get_analytics_client_instance
 from utils.metadata_util import filter_and_limit_workspaces, get_views
 import os
 from utils.common import retry_with_fallback
