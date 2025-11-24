@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.13-slim AS base
 
 WORKDIR /app
 
@@ -7,8 +7,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ./src/ .
 
-ARG HOSTED_LOCATION_ARG=LOCAL
-ENV HOSTED_LOCATION=${HOSTED_LOCATION_ARG}
-
-
+# stdio image
+FROM base AS stdio
 ENTRYPOINT ["python", "stdio.py"]
+
+# http image
+FROM base AS http
+ENTRYPOINT ["python", "http.py"]

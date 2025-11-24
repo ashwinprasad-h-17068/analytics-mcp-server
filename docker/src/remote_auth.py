@@ -412,6 +412,10 @@ async def consent(transaction_id: str = Query(...)):
     client_id = escape(txn.client_id)
     scope = escape(txn.scope)
     transaction_id_escaped = escape(transaction_id)
+    
+    # Static info for the UI based on the problem description
+    app_name = "Model Context Protocol (MCP) Host Application"
+    upstream_provider = "Zoho ACCOUNTS" 
 
     
     html = f"""
@@ -421,43 +425,106 @@ async def consent(transaction_id: str = Query(...)):
         <title>Authorize Access</title>
         <style>
             body {{
-                font-family: Arial, sans-serif;
-                margin: 40px;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background-color: #f4f7f6;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                margin: 0;
             }}
             .container {{
-                max-width: 600px;
-                margin: auto;
+                max-width: 500px;
+                width: 90%;
+                background-color: white;
+                padding: 30px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             }}
             h1 {{
+                color: #333;
+                font-size: 24px;
+                border-bottom: 2px solid #eee;
+                padding-bottom: 10px;
                 margin-bottom: 20px;
             }}
-            p {{
-                margin-bottom: 10px;
+            .details-table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 30px;
+            }}
+            .details-table th, .details-table td {{
+                padding: 12px;
+                text-align: left;
+                border-bottom: 1px solid #ddd;
+            }}
+            .details-table th {{
+                background-color: #eef;
+                color: #555;
+                font-weight: 600;
+                width: 40%;
+            }}
+            .details-table td {{
+                color: #333;
+                word-break: break-word; /* Ensure long IDs don't break layout */
+            }}
+            .consent-message {{
+                background-color: #ffffe0;
+                border-left: 5px solid #ffcc00;
+                padding: 15px;
+                margin-bottom: 20px;
+                color: #666;
             }}
             form {{
-                margin-top: 20px;
+                text-align: right;
             }}
             button {{
-                padding: 10px 20px;
-                margin-right: 10px;
+                padding: 10px 25px;
+                background-color: #007bff;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 16px;
                 cursor: pointer;
+                transition: background-color 0.3s ease;
+            }}
+            button:hover {{
+                background-color: #0056b3;
             }}
         </style>
     </head>
     <body>
         <div class="container">
             <h1>Authorize Access</h1>
-            <p><strong>Client ID:</strong> {client_id}</p>
-            <p><strong>Requested Scope:</strong> {scope}</p>
+            
+            <p class="consent-message">
+                The **{app_name}** application is requesting access to your data.
+                By approving, you authorize this proxy to initiate the login process 
+                with your **{upstream_provider}** account.
+            </p>
+
+            <table class="details-table">
+                <tr>
+                    <th>Application</th>
+                    <td>{app_name}</td>
+                </tr>
+                <tr>
+                    <th>Requested Scope</th>
+                    <td>{scope}</td>
+                </tr>
+                <tr>
+                    <th>Upstream Provider</th>
+                    <td>**{upstream_provider}**</td>
+                </tr>
+                <tr>
+                    <th>Client ID (MCP)</th>
+                    <td><small>{client_id}</small></td>
+                </tr>
+            </table>
 
             <form action="/consent/approve" method="post">
                 <input type="hidden" name="transaction_id" value="{transaction_id_escaped}">
-                <button type="submit" style="background-color:#4CAF50;color:white;">Approve</button>
-            </form>
-
-            <form action="/consent/deny" method="post">
-                <input type="hidden" name="transaction_id" value="{transaction_id_escaped}">
-                <button type="submit" style="background-color:#f44336;color:white;">Deny</button>
+                <button type="submit">✅ Approve and Continue</button>
             </form>
         </div>
     </body>
@@ -529,50 +596,6 @@ def build_error_redirect_url(base_url: str, params: Dict[str, str]) -> str:
     parsed = urlparse(base_url)
     query = urlencode(params)
     return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, parsed.fragment))
-
-
-
-@authRouter.post("/consent/deny")
-async def deny_consent(transaction_id: str = Form(...)):
-    """
-    Handles user denial of consent.
-    Redirects the user to the requesting client's redirect_uri with an access_denied error.
-    """
-    logger.info(f"User denied consent for transaction_id: {transaction_id}")
-    txn: AuthorizationTransaction = AUTH_TRANSACTIONS.pop(transaction_id, None)
-
-    if not txn:
-        logger.warning(f"Denial attempted for invalid transaction_id: {transaction_id}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_transaction")
-
-
-    client_redirect_uri = txn.redirect_uri
-    client_state = txn.state
-
-    is_expired = False
-    try:
-        if txn.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc): 
-            logger.warning(f"Expired transaction in denial flow for transaction_id: {transaction_id}")
-            is_expired = True
-    except TypeError:
-        pass 
-
-
-    error_params = {
-        "error": "access_denied",
-        "error_description": "The user denied the request for access.",
-    }
-    
-    if client_state:
-        error_params["state"] = client_state
-    
-    if not client_redirect_uri:
-         logger.error(f"Missing redirect_uri in transaction for transaction_id: {transaction_id}")
-         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Configuration Error: Missing client redirect URI.")
-    
-    error_redirect_url = build_error_redirect_url(client_redirect_uri, error_params)
-    logger.info(f"Redirecting user to client's error endpoint: {client_redirect_uri} for transaction_id: {transaction_id}")
-    return RedirectResponse(url=error_redirect_url, status_code=status.HTTP_302_FOUND)
 
 
 def ensure_aware_utc(dt: datetime) -> datetime:

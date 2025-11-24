@@ -7,7 +7,10 @@ import debugpy
 from remote_auth import authRouter
 from logging_util import configure_logging
 from remote_auth import AuthMiddleware
+from config import Settings
 
+
+Settings.HOSTED_LOCATION = "REMOTE"
 
 # Uncomment below line to start the debugger
 # debugpy.listen(("0.0.0.0", 5678))

@@ -1,5 +1,5 @@
 from mcp_instance import mcp
-from config import Config
+from config import Settings
 import os
 import json
 import urllib
@@ -148,7 +148,7 @@ async def import_data(workspace_id: str, table_id: str, data: list[dict] | None 
     """
     try:
         if not org_id:
-            org_id = Config.ORG_ID
+            org_id = Settings.ORG_ID
         
         return retry_with_fallback([org_id], workspace_id, "WORKSPACE", import_data_implementation, workspace_id=workspace_id, file_path=file_path, table_id=table_id, file_type=file_type, data=data)
     except Exception as e:
@@ -178,7 +178,7 @@ async def export_view(workspace_id: str, view_id: str, response_file_format: str
     """
     try:
         if not org_id:
-            org_id = Config.ORG_ID
+            org_id = Settings.ORG_ID
         return retry_with_fallback([org_id], workspace_id, "WORKSPACE", export_view_implementation, response_file_format=response_file_format, response_file_path=response_file_path, workspace_id=workspace_id, view_id=view_id)
     except Exception as e:
         ctx = get_context()
@@ -188,6 +188,8 @@ async def export_view(workspace_id: str, view_id: str, response_file_format: str
 
 @mcp.tool()
 async def query_data(workspace_id: str, sql_query: str, org_id: str | None = None) -> list[dict]:
+
+
     """
     <use_case>
     1. Executes a SQL query on the specified workspace and returns the top 20 rows as results.
@@ -217,10 +219,18 @@ async def query_data(workspace_id: str, sql_query: str, org_id: str | None = Non
     </returns>
     """
     if not org_id:
-        org_id = Config.ORG_ID
+        org_id = Settings.ORG_ID
+
     try:
         return retry_with_fallback([org_id], workspace_id, "WORKSPACE", query_data_implementation, workspace_id=workspace_id, sql_query=sql_query)
     except Exception as e:
         ctx = get_context()
         await ctx.error(traceback.format_exc())
         return f"An error occurred while executing the query: {e}"
+    
+
+if Settings.HOSTED_LOCATION == "REMOTE":
+    analyze_file_structure.disable()
+    download_file.disable()
+    import_data.disable()
+    export_view.disable()
