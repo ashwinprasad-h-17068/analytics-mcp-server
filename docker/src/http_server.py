@@ -13,7 +13,7 @@ from config import Settings
 Settings.HOSTED_LOCATION = "REMOTE"
 
 # Uncomment below line to start the debugger
-# debugpy.listen(("0.0.0.0", 5678))
+debugpy.listen(("0.0.0.0", 5678))
 
 @contextlib.asynccontextmanager
 async def app_lifespan(app: FastAPI):

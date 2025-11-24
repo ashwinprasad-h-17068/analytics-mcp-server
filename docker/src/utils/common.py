@@ -32,12 +32,3 @@ def get_view_org_id(view_id):
     analytics_client = get_analytics_client_instance()
     view_details = analytics_client.get_view_details(view_id, config={"withInvolvedMetaInfo": False})
     return view_details.get("orgId")
-
-def get_access_token():
-    """
-    For getting the access token from the MCP server.
-    """
-    request: Request = get_http_request()
-    auth_header = request.headers.get("Authorization")
-    access_token = auth_header.split(" ")[1]
-    return access_token
