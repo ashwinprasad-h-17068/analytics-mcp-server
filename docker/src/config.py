@@ -1,7 +1,8 @@
 import os
 from AnalyticsClient import AnalyticsClient
 from dotenv import load_dotenv
-
+from fastmcp.server.dependencies import get_http_request
+from starlette.requests import Request
 
 load_dotenv()
 
@@ -18,7 +19,7 @@ class Settings:
     OIDC_PROVIDER_BASE_URL = os.getenv("OIDC_PROVIDER_BASE_URL", "")
     OIDC_PROVIDER_CLIENT_ID = os.getenv("OIDC_PROVIDER_CLIENT_ID")
     OIDC_PROVIDER_CLIENT_SECRET = os.getenv("OIDC_PROVIDER_CLIENT_SECRET")
-    FASTMCP_SERVER_PUBLIC_URL = os.getenv("FASTMCP_SERVER_PUBLIC_URL")
+    MCP_SERVER_PUBLIC_URL = os.getenv("MCP_SERVER_PUBLIC_URL")
     HOSTED_LOCATION = None
 
 

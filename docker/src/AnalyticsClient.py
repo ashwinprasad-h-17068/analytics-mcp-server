@@ -26,6 +26,7 @@ class RemoteClientAuth(AuthBase):
 
     def get_access_token(self) -> str:
         return self._access_token
+
     
 class LocalClientAuth(AuthBase):
     """For desktop clients: uses client_id/secret + refresh_token to fetch new access tokens."""
@@ -35,12 +36,13 @@ class LocalClientAuth(AuthBase):
         self.client_secret = client_secret
         self.refresh_token = refresh_token
         self._access_token: Optional[str] = None
-        self.is_remote = True
+        self.is_remote = False
 
     def get_access_token(self) -> str:
-        if self._access_token is None:
-            self._refresh()
         return self._access_token
+
+    def set_access_token(self, access_token: str):
+        self._access_token = access_token
 
 
 class AnalyticsClient:
@@ -2414,7 +2416,7 @@ class AnalyticsClient:
         self.proxy_password = proxy_password
 
     def send_batch_import_api_request(self, request_url, config, request_headers, file_path, batch_size, tool_config):
-        if not self.auth.is_remote and self.access_token is None:
+        if not self.auth.is_remote and self.auth.get_access_token() is None:
             self.regenerate_analytics_oauth_token()
 
         file_header = open(file_path, 'r').readline()
@@ -2433,12 +2435,12 @@ class AnalyticsClient:
             config["isLastBatch"] = "true" if (i == (total_batch_count - 1)) else "false"
             config_data = "CONFIG=" + urllib.parse.quote_plus(json.dumps(config))
 
-            resp_obj = self.submit_import_request(request_url, config_data, request_headers, self.access_token, files)
+            resp_obj = self.submit_import_request(request_url, config_data, request_headers, self.auth.get_access_token(), files)
 
             if not (str(resp_obj.status_code).startswith("2")):
                 if not self.auth.is_remote and self.is_oauth_expired(resp_obj):
                     self.regenerate_analytics_oauth_token()
-                    resp_obj = self.submit_import_request(request_url, config_data, request_headers, self.access_token,
+                    resp_obj = self.submit_import_request(request_url, config_data, request_headers, self.auth.get_access_token(),
                                                           files)
                     if not (str(resp_obj.status_code).startswith("2")):
                         raise ServerError(resp_obj.resp_content, False)
@@ -2456,7 +2458,7 @@ class AnalyticsClient:
         """
         Internal method to handle HTTP request.
         """
-        if not self.auth.is_remote and self.access_token == None:
+        if not self.auth.is_remote and self.auth.get_access_token() == None:
             self.regenerate_analytics_oauth_token()
 
         request_url = self.analytics_server_url + request_url
@@ -2471,19 +2473,19 @@ class AnalyticsClient:
                 config_data = ""  
 
             config_data += "DATA=" + urllib.parse.quote_plus(json.dumps(data)) 
-            resp_obj = self.submit_import_request(request_url, config_data, request_headers, self.access_token)
+            resp_obj = self.submit_import_request(request_url, config_data, request_headers, self.auth.get_access_token())
         else:
             files = {'FILE': open(file_path,'rb')}
-            resp_obj = self.submit_import_request(request_url, config_data, request_headers, self.access_token, files)    
+            resp_obj = self.submit_import_request(request_url, config_data, request_headers, self.auth.get_access_token(), files)    
         
 
         if not (str(resp_obj.status_code).startswith("2")):
             if not self.auth.is_remote and (self.is_oauth_expired(resp_obj)):
                 self.regenerate_analytics_oauth_token()
                 if bool(data):
-                    resp_obj = self.submit_import_request(request_url, config_data, request_headers, self.access_token)
+                    resp_obj = self.submit_import_request(request_url, config_data, request_headers, self.auth.get_access_token())
                 else:
-                    resp_obj = self.submit_import_request(request_url, config_data, request_headers, self.access_token, files)
+                    resp_obj = self.submit_import_request(request_url, config_data, request_headers, self.auth.get_access_token(), files)
                 if not (str(resp_obj.status_code).startswith("2")):
                     raise ServerError(resp_obj.resp_content, False)
             else:
@@ -2535,7 +2537,7 @@ class AnalyticsClient:
         """
         file = open(file_path,"wb")
 
-        if not self.auth.is_remote and self.access_token == None:
+        if not self.auth.is_remote and self.auth.get_access_token() == None:
             self.regenerate_analytics_oauth_token()
 
         request_url = self.analytics_server_url + request_url
@@ -2543,13 +2545,13 @@ class AnalyticsClient:
         if bool(config):
             config_data = "CONFIG=" + urllib.parse.quote_plus(json.dumps(config))
 
-        resp_obj = self.submit_export_request(request_url, config_data, request_headers, self.access_token)
+        resp_obj = self.submit_export_request(request_url, config_data, request_headers, self.auth.get_access_token())
 
         if not (str(resp_obj.status_code).startswith("2")):
             resp_obj = response_obj(resp_obj)
             if not self.auth.is_remote and (self.is_oauth_expired(resp_obj)):
                 self.regenerate_analytics_oauth_token()
-                resp_obj = self.submit_export_request(request_url, config_data, request_headers, self.access_token)
+                resp_obj = self.submit_export_request(request_url, config_data, request_headers, self.auth.get_access_token())
                 if not (str(resp_obj.status_code).startswith("2")):
                     raise ServerError(resp_obj.resp_content, False)
             else:
@@ -2595,7 +2597,7 @@ class AnalyticsClient:
         """
         Internal method to handle HTTP request.
         """
-        if not self.auth.is_remote and self.access_token == None:
+        if not self.auth.is_remote and self.auth.get_access_token() == None:
             self.regenerate_analytics_oauth_token()
             
         request_url = self.analytics_server_url + request_url
@@ -2603,12 +2605,12 @@ class AnalyticsClient:
         if bool(config):
             config_data = "CONFIG=" + urllib.parse.quote_plus(json.dumps(config))
 
-        resp_obj = self.submit_request(request_method, request_url, config_data, request_headers, self.access_token)
+        resp_obj = self.submit_request(request_method, request_url, config_data, request_headers, self.auth.get_access_token())
 
         if not (str(resp_obj.status_code).startswith("2")):
             if not self.auth.is_remote and (self.is_oauth_expired(resp_obj)):
                 self.regenerate_analytics_oauth_token()
-                resp_obj = self.submit_request(request_method, request_url, config_data, request_headers, self.access_token)
+                resp_obj = self.submit_request(request_method, request_url, config_data, request_headers, self.auth.get_access_token())
                 if not (str(resp_obj.status_code).startswith("2")):
                     raise ServerError(resp_obj.resp_content, False)
             else:
@@ -2700,9 +2702,9 @@ class AnalyticsClient:
         Internal method for getting OAuth token.
         """
         oauth_params = {}
-        oauth_params["client_id"] = self.client_id
-        oauth_params["client_secret"] = self.client_secret
-        oauth_params["refresh_token"] = self.refresh_token
+        oauth_params["client_id"] = self.auth.client_id
+        oauth_params["client_secret"] = self.auth.client_secret
+        oauth_params["refresh_token"] = self.auth.refresh_token
         oauth_params["grant_type"] = "refresh_token"
         oauth_params = urllib.parse.urlencode(oauth_params) #.encode(self.COMMON_ENCODE_CHAR)
         req_url = self.accounts_server_url + "/oauth/v2/token"
@@ -2711,7 +2713,7 @@ class AnalyticsClient:
         if(oauth_resp_obj.status_code == 200):
             oauth_json_resp = json.loads(oauth_resp_obj.resp_content)
             if("access_token" in oauth_json_resp):
-                self.access_token = oauth_json_resp["access_token"]
+                self.auth.set_access_token(oauth_json_resp["access_token"])
                 return
 
         raise ServerError(oauth_resp_obj.resp_content, True)

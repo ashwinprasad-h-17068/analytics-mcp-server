@@ -66,6 +66,7 @@ UNAUTHENTICATED_PATHS = {
     "/consent/deny",
     "/auth/callback",
     "/token",
+    "/favicon.ico"
     "/",
 }
 
@@ -149,7 +150,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     def _unauthorized_response(self, detail: str) -> JSONResponse:
         """Constructs the standardized 401 Unauthorized JSON response."""
         try:
-            base = Settings.FASTMCP_SERVER_PUBLIC_URL.rstrip("/") + "/"
+            base = Settings.MCP_SERVER_PUBLIC_URL.rstrip("/") + "/"
         except NameError:
             base = "/" 
             
@@ -212,7 +213,7 @@ async def oauth_protected_resource():
     acting as the access point and intermediary for the MCP Clients.
     """
     logger.debug("Serving OAuth protected resource metadata")
-    base = Settings.FASTMCP_SERVER_PUBLIC_URL.rstrip("/") + "/"
+    base = Settings.MCP_SERVER_PUBLIC_URL.rstrip("/") + "/"
     return {
         "resource": urljoin(base, "mcp"),
         "authorization_servers": [
@@ -237,7 +238,7 @@ async def oauth_authorization_server():
     - The MCP Clients interact only with these endpoints.
     """
     logger.debug("Serving OAuth authorization server metadata")
-    base = Settings.FASTMCP_SERVER_PUBLIC_URL.rstrip("/") + "/"
+    base = Settings.MCP_SERVER_PUBLIC_URL.rstrip("/") + "/"
     return {
         "issuer": base,
         "authorization_endpoint": urljoin(base, "authorize"),
@@ -281,7 +282,7 @@ async def register_client(payload: DynamicClientRegistrationRequest):
 
     client_id = str(uuid.uuid4())
     client_secret = secrets.token_urlsafe(32)
-    base = Settings.FASTMCP_SERVER_PUBLIC_URL.rstrip("/") + "/"
+    base = Settings.MCP_SERVER_PUBLIC_URL.rstrip("/") + "/"
 
 
     REGISTERED_CLIENTS[client_id] = DynamicClientRegistrationRequest(
@@ -384,7 +385,7 @@ async def authorize(
     )
 
 
-    base = Settings.FASTMCP_SERVER_PUBLIC_URL.rstrip("/") + "/"
+    base = Settings.MCP_SERVER_PUBLIC_URL.rstrip("/") + "/"
     consent_base = urljoin(base, "consent")
 
     consent_url = build_url_with_params(consent_base, {
@@ -415,7 +416,7 @@ async def consent(transaction_id: str = Query(...)):
     
     # Static info for the UI based on the problem description
     app_name = "Model Context Protocol (MCP) Host Application"
-    upstream_provider = "Zoho ACCOUNTS" 
+    upstream_provider = "Zoho Accounts" 
 
     
     html = f"""
@@ -498,7 +499,7 @@ async def consent(transaction_id: str = Query(...)):
             <h1>Authorize Access</h1>
             
             <p class="consent-message">
-                The **{app_name}** application is requesting access to your data.
+                The {app_name} application is requesting access to your data.
                 By approving, you authorize this proxy to initiate the login process 
                 with your **{upstream_provider}** account.
             </p>
@@ -562,7 +563,7 @@ async def approve_consent(transaction_id: str = Form(...)):
         "oauth/v2/auth"
     )
 
-    proxy_callback_uri = urljoin(Settings.FASTMCP_SERVER_PUBLIC_URL.rstrip('/') + '/', "auth/callback")
+    proxy_callback_uri = urljoin(Settings.MCP_SERVER_PUBLIC_URL.rstrip('/') + '/', "auth/callback")
 
     # Parameters required by the Upstream Provider
     # Crucially, we use the PROXY's static credentials and redirect URI,
@@ -703,7 +704,7 @@ authorization code (received during the `/auth/callback` step) for the
     """
     logger.info("Initiating upstream token exchange")
     
-    proxy_callback_uri = urljoin(Settings.FASTMCP_SERVER_PUBLIC_URL.rstrip('/') + '/', "auth/callback")
+    proxy_callback_uri = urljoin(Settings.MCP_SERVER_PUBLIC_URL.rstrip('/') + '/', "auth/callback")
     token_endpoint = urljoin(Settings.OIDC_PROVIDER_BASE_URL.rstrip('/') + '/', "oauth/v2/token")
     data={
         "grant_type": "authorization_code",

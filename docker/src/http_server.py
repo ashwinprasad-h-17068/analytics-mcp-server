@@ -1,3 +1,4 @@
+import tools
 from mcp_instance import mcp
 import contextlib
 from fastapi import FastAPI

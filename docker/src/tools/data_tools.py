@@ -94,7 +94,7 @@ async def download_file(file_url: str) -> str:
 
     try:
 
-        download_dir = Config.MCP_DATA_DIR
+        download_dir = Settings.MCP_DATA_DIR
         os.makedirs(download_dir, exist_ok=True)
 
         filename = os.path.basename(urllib.parse.urlparse(file_url).path)

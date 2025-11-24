@@ -1,5 +1,5 @@
 from mcp_instance import mcp
-from config import Config, get_analytics_client_instance
+from config import Settings, get_analytics_client_instance
 from utils.common import retry_with_fallback
 from utils.modelling_utils import (
     create_workspace_implementation, 
@@ -34,7 +34,7 @@ async def create_workspace(workspace_name: str, org_id: str | None = None) -> st
     """
     try:
         if not org_id:
-            org_id = Config.ORG_ID
+            org_id = Settings.ORG_ID
         return retry_with_fallback([org_id], None, None, create_workspace_implementation, workspace_name=workspace_name)
     except Exception as e:
         ctx = get_context()
@@ -62,7 +62,7 @@ async def create_table(workspace_id: str, table_name: str, columns_list: list[di
     """
     try:
         if not org_id:
-            org_id = Config.ORG_ID
+            org_id = Settings.ORG_ID
         return retry_with_fallback([org_id], workspace_id, "WORKSPACE", create_table_implementation, 
                                    workspace_id=workspace_id, table_name=table_name, columns_list=columns_list)
     except Exception as e:
@@ -103,7 +103,7 @@ async def create_aggregate_formula(workspace_id: str, table_id: str, expression:
     """
     try:
         if not org_id:
-            org_id = Config.ORG_ID
+            org_id = Settings.ORG_ID
         return retry_with_fallback([org_id], workspace_id, "WORKSPACE", create_aggregate_formula_implementation, workspace_id=workspace_id,
                                   table_id=table_id, expression=expression, formula_name=formula_name)
     except Exception as e:
@@ -166,7 +166,7 @@ async def create_chart_report(workspace_id: str, table_name: str, chart_name: st
     """
     try:
         if not org_id:
-            org_id = Config.ORG_ID
+            org_id = Settings.ORG_ID
         return retry_with_fallback([org_id], workspace_id, "WORKSPACE", create_chart_report_implementation,workspace_id=workspace_id,
                                    table_name=table_name, chart_name=chart_name, 
                                    chart_details=chart_details, filters=filters)
@@ -232,7 +232,7 @@ async def create_pivot_report(workspace_id: str, table_name: str, report_name: s
     """
     try:
         if not org_id:
-            org_id = Config.ORG_ID
+            org_id = Settings.ORG_ID
         return retry_with_fallback([org_id], workspace_id, "WORKSPACE", create_pivot_report_implementation,workspace_id=workspace_id,
                                   table_name=table_name, report_name=report_name, 
                                   pivot_details=pivot_details, filters=filters)
@@ -296,7 +296,7 @@ async def create_summary_report(workspace_id: str, table_name: str, report_name:
     """
     try:
         if not org_id:
-            org_id = Config.ORG_ID
+            org_id = Settings.ORG_ID
         return retry_with_fallback([org_id], workspace_id, "WORKSPACE", create_summary_report_implementation,workspace_id=workspace_id,
                                   table_name=table_name, report_name=report_name, 
                                   summary_details=summary_details, filters=filters)
@@ -336,7 +336,7 @@ async def create_query_table(workspace_id: str, table_name: str, query: str, org
     """
     try:
         if not org_id:
-            org_id = Config.ORG_ID
+            org_id = Settings.ORG_ID
         return retry_with_fallback([org_id], workspace_id, "WORKSPACE", create_query_table_implementation, workspace_id=workspace_id,
                                   table_name=table_name, query=query)
     except Exception as e:
@@ -361,7 +361,7 @@ async def delete_view(workspace_id: str, view_id: str, org_id: str | None = None
     """
     try:
         if not org_id:
-            org_id = Config.ORG_ID
+            org_id = Settings.ORG_ID
         return retry_with_fallback([org_id], workspace_id, "WORKSPACE", delete_view_implementation, workspace_id=workspace_id,view_id=view_id)
     except Exception as e:
         ctx = get_context()

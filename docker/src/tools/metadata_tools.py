@@ -1,5 +1,5 @@
 from mcp_instance import mcp
-from config import get_analytics_client_instance
+from config import get_analytics_client_instance, Settings
 from utils.metadata_util import filter_and_limit_workspaces, get_views
 import os
 from utils.common import retry_with_fallback
@@ -145,7 +145,7 @@ async def search_views(
     """
     try:
         if not org_id:
-            org_id = Config.ORG_ID
+            org_id = Settings.ORG_ID
 
         if (view_contains_str is not None and view_contains_str.strip() != "") or (natural_language_query is None or natural_language_query.strip() == ""):
             return retry_with_fallback([org_id], workspace_id, "WORKSPACE", get_views,workspace_id=workspace_id, allowedViewTypesIds=allowedViewTypesIds, contains_str=view_contains_str, from_relevant_views_tool=False)

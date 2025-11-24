@@ -13,4 +13,4 @@ ENTRYPOINT ["python", "stdio.py"]
 
 # http image
 FROM base AS http
-ENTRYPOINT ["python", "http.py"]
+ENTRYPOINT ["python", "http_server.py"]
