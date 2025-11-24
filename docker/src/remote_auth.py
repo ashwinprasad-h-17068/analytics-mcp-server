@@ -66,7 +66,7 @@ UNAUTHENTICATED_PATHS = {
     "/consent/deny",
     "/auth/callback",
     "/token",
-    "/favicon.ico"
+    "/favicon.ico",
     "/",
 }
 
