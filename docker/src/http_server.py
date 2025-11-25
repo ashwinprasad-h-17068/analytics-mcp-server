@@ -9,6 +9,8 @@ from remote_auth import authRouter
 from logging_util import configure_logging
 from remote_auth import AuthMiddleware
 from config import Settings
+from starlette.middleware.sessions import SessionMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 
 
 Settings.HOSTED_LOCATION = "REMOTE"
@@ -30,9 +32,17 @@ async def combined_lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=combined_lifespan)
 app.add_middleware(AuthMiddleware)
+app.add_middleware(SessionMiddleware, secret_key="YOUR_VERY_SECURE_SECRET")
 app.include_router(authRouter, prefix="")
 app.mount("/analytics", mcp_server)
 
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["http://localhost:6274"],
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 
 configure_logging(
     level="DEBUG",              # overall minimum
@@ -42,6 +52,8 @@ configure_logging(
     max_bytes=5 * 1024 * 1024,  # 5 MB
     backup_count=3,
 )
+
+
 
 
 def main():

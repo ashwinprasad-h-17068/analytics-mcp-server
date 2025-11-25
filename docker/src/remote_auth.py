@@ -215,7 +215,7 @@ async def oauth_protected_resource():
     logger.debug("Serving OAuth protected resource metadata")
     base = Settings.MCP_SERVER_PUBLIC_URL.rstrip("/") + "/"
     return {
-        "resource": urljoin(base, "mcp"),
+        "resource": urljoin(urljoin(base, "analytics/"),"mcp"),
         "authorization_servers": [
             base
         ],
@@ -396,8 +396,29 @@ async def authorize(
     return RedirectResponse(url=consent_url, status_code=302)
 
 
+def generate_csrf_token(request: Request) -> str:
+    """Generates a new CSRF token and stores it in the session."""
+    if "csrf_token" not in request.session:
+        request.session["csrf_token"] = secrets.token_urlsafe(32)
+    return request.session["csrf_token"]
+
+
+
+def validate_csrf_token(request: Request, form_token: str):
+    """Validates the token from the form against the token in the session."""
+    session_token = request.session.get("csrf_token")
+    
+    if not session_token or not form_token or session_token != form_token:
+        request.session.pop("csrf_token", None)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Invalid CSRF token"
+        )
+
+
+
 @authRouter.get("/consent", response_class=HTMLResponse)
-async def consent(transaction_id: str = Query(...)):
+async def consent(request: Request, transaction_id: str = Query(...)):
     logger.debug(f"Consent page requested for transaction_id: {transaction_id}")
     txn: AuthorizationTransaction = AUTH_TRANSACTIONS.get(transaction_id)
     if not txn:
@@ -413,6 +434,9 @@ async def consent(transaction_id: str = Query(...)):
     client_id = escape(txn.client_id)
     scope = escape(txn.scope)
     transaction_id_escaped = escape(transaction_id)
+
+    csrf_token = generate_csrf_token(request)
+    csrf_token_escaped = escape(csrf_token)
     
     # Static info for the UI based on the problem description
     app_name = "Model Context Protocol (MCP) Host Application"
@@ -501,7 +525,7 @@ async def consent(transaction_id: str = Query(...)):
             <p class="consent-message">
                 The {app_name} application is requesting access to your data.
                 By approving, you authorize this proxy to initiate the login process 
-                with your **{upstream_provider}** account.
+                with your {upstream_provider} account.
             </p>
 
             <table class="details-table">
@@ -515,7 +539,7 @@ async def consent(transaction_id: str = Query(...)):
                 </tr>
                 <tr>
                     <th>Upstream Provider</th>
-                    <td>**{upstream_provider}**</td>
+                    <td>{upstream_provider}</td>
                 </tr>
                 <tr>
                     <th>Client ID (MCP)</th>
@@ -525,6 +549,7 @@ async def consent(transaction_id: str = Query(...)):
 
             <form action="/consent/approve" method="post">
                 <input type="hidden" name="transaction_id" value="{transaction_id_escaped}">
+                <input type="hidden" name="csrf_token" value="{csrf_token_escaped}">
                 <button type="submit">✅ Approve and Continue</button>
             </form>
         </div>
@@ -536,12 +561,15 @@ async def consent(transaction_id: str = Query(...)):
 
 
 @authRouter.post("/consent/approve")
-async def approve_consent(transaction_id: str = Form(...)):
+async def approve_consent(request: Request, transaction_id: str = Form(...), csrf_token: str = Form(...)):
     """
     Handles user approval. Redirects the user's browser to the upstream
     provider's authorization endpoint using the proxy's static credentials
     and the transaction ID as the state parameter.
     """
+
+    validate_csrf_token(request, csrf_token)
+
     logger.info(f"User approved consent for transaction_id: {transaction_id}")
     txn: AuthorizationTransaction = AUTH_TRANSACTIONS.get(transaction_id)
     if not txn:
@@ -564,19 +592,11 @@ async def approve_consent(transaction_id: str = Form(...)):
     )
 
     proxy_callback_uri = urljoin(Settings.MCP_SERVER_PUBLIC_URL.rstrip('/') + '/', "auth/callback")
-
-    # Parameters required by the Upstream Provider
-    # Crucially, we use the PROXY's static credentials and redirect URI,
-    # and the transaction_id acts as the state to map back to the client's request.
     upstream_params = {
-        # Static Client ID for the Proxy-to-Upstream connection
         "client_id": Settings.OIDC_PROVIDER_CLIENT_ID, 
         "response_type": "code",
-        # Static Redirect URI for the Proxy-to-Upstream connection
         "redirect_uri": proxy_callback_uri,
-        # Scope requested by the dynamic client, approved by the user
         "scope": txn.scope,
-        # Use transaction ID as state to link upstream response to local transaction
         "state": transaction_id,
         "access_type": "offline",
         "prompt": "Consent"
