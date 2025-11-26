@@ -1,8 +1,6 @@
 from config import get_analytics_client_instance
 import os
-from fastmcp import Context
-import math
-import json
+import asyncio
 
 def filter_and_limit_workspaces(workspaces, contains_str, owned_flag, limit=20):
     """
@@ -26,7 +24,7 @@ def filter_and_limit_workspaces(workspaces, contains_str, owned_flag, limit=20):
 
 
 VIEW_RESULT_LIMIT = os.getenv("ANALYTICS_VIEW_LIST_RESULT_SIZE") or 15
-def get_views(org_id, workspace_id, allowedViewTypesIds, contains_str, from_relevant_views_tool=False):
+async def get_views(org_id, workspace_id, allowedViewTypesIds, contains_str, from_relevant_views_tool=False):
     analytics_client = get_analytics_client_instance()
     workspace = analytics_client.get_workspace_instance(org_id, workspace_id)
     config={
@@ -42,7 +40,7 @@ def get_views(org_id, workspace_id, allowedViewTypesIds, contains_str, from_rele
         }
     if contains_str:
         config["keyword"] = contains_str
-    view_list = workspace.get_views(config)
+    view_list = await asyncio.to_thread(workspace.get_views, config)
     if view_list is None or len(view_list) == 0:
         return "No views found"
     

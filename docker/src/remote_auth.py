@@ -51,6 +51,7 @@ import uuid
 from html import escape 
 import httpx
 from logging_util import get_logger
+import asyncio
 
 logger = get_logger(__name__)
 
@@ -188,7 +189,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # The actual call to a protected resource to validate the token's active status.
             # We don't need the result, just that the call succeeded.
             analytics_client = get_analytics_client_instance(token)
-            analytics_client.get_owned_workspaces()
+            await asyncio.to_thread(analytics_client.get_owned_workspaces)
             logger.debug(f"Token validated successfully for path: {path}")
             
         except ValueError:
@@ -561,7 +562,9 @@ async def consent(request: Request, transaction_id: str = Query(...)):
 
 
 @authRouter.post("/consent/approve")
-async def approve_consent(request: Request, transaction_id: str = Form(...), csrf_token: str = Form(...)):
+async def approve_consent(request: Request, transaction_id: str = Form(...),
+                          csrf_token: str = Form(...)
+                          ):
     """
     Handles user approval. Redirects the user's browser to the upstream
     provider's authorization endpoint using the proxy's static credentials
@@ -710,7 +713,7 @@ async def proxy_callback(
     return RedirectResponse(url=final_redirect_url, status_code=status.HTTP_302_FOUND)
 
 
-def upstream_token_exchange(code: str) -> dict:
+async def upstream_token_exchange(code: str) -> dict:
     """
     ## Upstream Token Exchange
 
@@ -735,11 +738,12 @@ authorization code (received during the `/auth/callback` step) for the
     }
     
     try:
-        response = httpx.post(
-            token_endpoint,
-            data=data,
-            headers={"Content-Type": "application/x-www-form-urlencoded"}
-        )
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                token_endpoint,
+                data=data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"}
+            )
         response.raise_for_status()
         logger.info("Upstream token exchange successful")
         return response.json()
@@ -807,7 +811,7 @@ async def token_exchange(
     upstream_code = auth_code_data.upstream_code
 
     try:
-        upstream_tokens = upstream_token_exchange(
+        upstream_tokens = await upstream_token_exchange(
             code=upstream_code,
         )
    

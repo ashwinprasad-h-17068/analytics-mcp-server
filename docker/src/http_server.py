@@ -4,7 +4,7 @@ import contextlib
 from fastapi import FastAPI
 import uvicorn
 import os
-import debugpy
+# import debugpy
 from remote_auth import authRouter
 from logging_util import configure_logging
 from remote_auth import AuthMiddleware
@@ -16,21 +16,12 @@ from fastapi.middleware.cors import CORSMiddleware
 Settings.HOSTED_LOCATION = "REMOTE"
 
 # Uncomment below line to start the debugger
-debugpy.listen(("0.0.0.0", 5678))
+# debugpy.listen(("0.0.0.0", 5678))
 
-@contextlib.asynccontextmanager
-async def app_lifespan(app: FastAPI):
-    yield
 
 mcp_server = mcp.http_app(transport="streamable-http", path="/mcp")
 
-@contextlib.asynccontextmanager
-async def combined_lifespan(app: FastAPI):
-    async with app_lifespan(app):
-        async with mcp_server.lifespan(app):
-            yield
-
-app = FastAPI(lifespan=combined_lifespan)
+app = FastAPI(lifespan=mcp_server.lifespan)
 app.add_middleware(AuthMiddleware)
 app.add_middleware(SessionMiddleware, secret_key="YOUR_VERY_SECURE_SECRET")
 app.include_router(authRouter, prefix="")
@@ -52,8 +43,6 @@ configure_logging(
     max_bytes=5 * 1024 * 1024,  # 5 MB
     backup_count=3,
 )
-
-
 
 
 def main():

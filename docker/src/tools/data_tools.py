@@ -150,7 +150,7 @@ async def import_data(workspace_id: str, table_id: str, data: list[dict] | None 
         if not org_id:
             org_id = Settings.ORG_ID
         
-        return retry_with_fallback([org_id], workspace_id, "WORKSPACE", import_data_implementation, workspace_id=workspace_id, file_path=file_path, table_id=table_id, file_type=file_type, data=data)
+        return await retry_with_fallback([org_id], workspace_id, "WORKSPACE", import_data_implementation, workspace_id=workspace_id, file_path=file_path, table_id=table_id, file_type=file_type, data=data)
     except Exception as e:
         ctx = get_context()
         await ctx.error(traceback.format_exc())
@@ -179,7 +179,7 @@ async def export_view(workspace_id: str, view_id: str, response_file_format: str
     try:
         if not org_id:
             org_id = Settings.ORG_ID
-        return retry_with_fallback([org_id], workspace_id, "WORKSPACE", export_view_implementation, response_file_format=response_file_format, response_file_path=response_file_path, workspace_id=workspace_id, view_id=view_id)
+        return await retry_with_fallback([org_id], workspace_id, "WORKSPACE", export_view_implementation, response_file_format=response_file_format, response_file_path=response_file_path, workspace_id=workspace_id, view_id=view_id)
     except Exception as e:
         ctx = get_context()
         await ctx.error(traceback.format_exc())
@@ -188,8 +188,6 @@ async def export_view(workspace_id: str, view_id: str, response_file_format: str
 
 @mcp.tool()
 async def query_data(workspace_id: str, sql_query: str, org_id: str | None = None) -> list[dict]:
-
-
     """
     <use_case>
     1. Executes a SQL query on the specified workspace and returns the top 20 rows as results.
@@ -222,7 +220,7 @@ async def query_data(workspace_id: str, sql_query: str, org_id: str | None = Non
         org_id = Settings.ORG_ID
 
     try:
-        return retry_with_fallback([org_id], workspace_id, "WORKSPACE", query_data_implementation, workspace_id=workspace_id, sql_query=sql_query)
+        return await retry_with_fallback([org_id], workspace_id, "WORKSPACE", query_data_implementation, workspace_id=workspace_id, sql_query=sql_query)
     except Exception as e:
         ctx = get_context()
         await ctx.error(traceback.format_exc())

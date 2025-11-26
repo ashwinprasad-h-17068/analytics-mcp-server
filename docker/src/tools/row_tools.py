@@ -22,7 +22,7 @@ async def add_row(workspace_id: str, table_id: str, columns: dict[str,str], org_
     try:
         if not org_id:
             org_id = Settings.ORG_ID    
-        retry_with_fallback([org_id], workspace_id, "WORKSPACE", add_row_implementation, workspace_id=workspace_id, table_id=table_id, columns=columns)
+        await retry_with_fallback([org_id], workspace_id, "WORKSPACE", add_row_implementation, workspace_id=workspace_id, table_id=table_id, columns=columns)
     except Exception as e:
         ctx = get_context()
         await ctx.error(traceback.format_exc())
@@ -48,7 +48,7 @@ async def delete_rows(workspace_id: str, table_id: str, criteria: str, org_id: s
         if not org_id:
             org_id = Settings.ORG_ID
             
-        retry_with_fallback([org_id], workspace_id, "WORKSPACE", delete_rows_implementation, workspace_id=workspace_id, table_id=table_id, criteria=criteria)
+        await retry_with_fallback([org_id], workspace_id, "WORKSPACE", delete_rows_implementation, workspace_id=workspace_id, table_id=table_id, criteria=criteria)
     except Exception as e:
         ctx = get_context()
         await ctx.error(traceback.format_exc())
@@ -75,7 +75,7 @@ async def update_rows(workspace_id: str, table_id: str, columns: dict[str,str], 
         if not org_id:
             org_id = Settings.ORG_ID
                         
-        return retry_with_fallback([org_id], workspace_id, "WORKSPACE", update_rows_implementation, workspace_id=workspace_id, table_id=table_id, criteria=criteria, columns=columns)
+        return await retry_with_fallback([org_id], workspace_id, "WORKSPACE", update_rows_implementation, workspace_id=workspace_id, table_id=table_id, criteria=criteria, columns=columns)
     except Exception as e:
         ctx = get_context()
         await ctx.error(traceback.format_exc())
