@@ -824,8 +824,7 @@ async def token_exchange(
         "token_type": upstream_tokens.get("token_type", "Bearer"),
         "expires_in": upstream_tokens.get("expires_in"),
         "refresh_token": upstream_tokens.get("refresh_token"),
-        "scope": upstream_tokens.get("scope"),
-        "id_token": upstream_tokens.get("id_token"),
+        "scope": upstream_tokens.get("scope")
     }
     logger.info(f"Token exchange completed successfully for client_id: {client_id}")
     return JSONResponse(content=response_tokens, status_code=status.HTTP_200_OK)
