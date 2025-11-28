@@ -44,7 +44,7 @@ from urllib.parse import urljoin, urlencode, urlparse, urlunparse, parse_qsl, ur
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.status import HTTP_401_UNAUTHORIZED
 import secrets
-from pydantic import BaseModel, AnyHttpUrl
+from pydantic import BaseModel, AnyHttpUrl, AnyUrl
 from typing import Optional, Dict
 from datetime import datetime, timedelta, timezone, UTC
 import uuid
@@ -89,7 +89,7 @@ class AuthorizationTransaction(BaseModel):
     created_at: datetime
     expires_at: datetime
     client_id: str
-    redirect_uri: AnyHttpUrl
+    redirect_uri: AnyUrl
     scope: str
     state: Optional[str] = None
     code_challenge: Optional[str] = None
@@ -101,7 +101,7 @@ class AuthorizationCode(BaseModel):
     expires_at: datetime
     transaction_id: str
     client_id: str
-    redirect_uri: AnyHttpUrl
+    redirect_uri: AnyUrl
     code_challenge: Optional[str] = None
     code_challenge_method: Optional[str] = None
     upstream_location: str
@@ -379,7 +379,7 @@ async def authorize(
         expires_at=now + timedelta(seconds=AUTH_TRANSACTION_TTL_SECONDS),
         client_id=client_id,
         redirect_uri=redirect_uri,
-        scope=scope or client.scope,
+        scope=scope or client.scope or 'ZohoAnalytics.fullaccess.all',
         state=state,
         code_challenge=code_challenge,
         code_challenge_method=code_challenge_method,
