@@ -3,6 +3,17 @@ import asyncio
 
 async def create_workspace_implementation(org_id, workspace_name):
     analytics_client = get_analytics_client_instance()
+    if org_id == '-1':
+        # Org ID is set to -1 in remote MCP cases.
+        orgs = await asyncio.to_thread(analytics_client.get_orgs)
+        for org in orgs:
+            if org.get("isDefault"):
+                org_id = org.get("orgId")
+                break
+        if org_id is None or org_id == '-1':
+            return "Unable to determine default organization ID."
+
+
     org = analytics_client.get_org_instance(org_id)
     result = await asyncio.to_thread(org.create_workspace, workspace_name)
     return f"Workspace '{workspace_name}' created successfully. Workspace Id : {result}"
