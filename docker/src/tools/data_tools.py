@@ -150,7 +150,8 @@ async def import_data(workspace_id: str, table_id: str, data: list[dict] | None 
         if not org_id:
             org_id = Settings.ORG_ID
         
-        return await retry_with_fallback([org_id], workspace_id, "WORKSPACE", import_data_implementation, workspace_id=workspace_id, file_path=file_path, table_id=table_id, file_type=file_type, data=data)
+        result = await retry_with_fallback([org_id], workspace_id, "WORKSPACE", import_data_implementation, workspace_id=workspace_id, file_path=file_path, table_id=table_id, file_type=file_type, data=data)
+        return result.__str__()
     except Exception as e:
         ctx = get_context()
         await ctx.error(traceback.format_exc())

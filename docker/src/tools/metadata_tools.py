@@ -135,7 +135,6 @@ async def search_views(
             4 - Summary View: A view that provides a simple tabular summary of your data with aggregate functions applied
             6 - Query Table: A derived table created from a custom SQL query
             7 - Dashboard: A collection of visualizations and reports
-        - ctx (Context | None): Context for async operations - required for natural language search.
         - org_id (str | None): Organization ID. Defaults to config value if not provided.
     </arguments>
 
@@ -204,6 +203,8 @@ async def search_views(
                     
                     Strictly provide your output in the following JSON format:
                     {{"relevant_views":[<list-of-top-5-view-ids-in-order-of-relevance>]}}
+
+                    Do not enclose the response in any markdown or code block with json syntax.
                     """
 
                     try:
@@ -215,9 +216,6 @@ async def search_views(
                             sample_supported = False
                         break
 
-
-                    if response_string.type != "text":
-                        return "Error in processing the RAG response. Please try again."
                     
                     log_message = {
                         "epoch": epoch,
@@ -256,5 +254,6 @@ async def search_views(
 
     
     except Exception as e:
+        ctx = get_context()
         ctx.error(traceback.format_exc())
         return f"An error occurred while fetching views: {e}"

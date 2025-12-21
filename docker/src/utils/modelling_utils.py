@@ -1,5 +1,12 @@
 from config import get_analytics_client_instance
 import asyncio
+from dataclasses import dataclass
+from fastmcp.server.dependencies import get_context
+
+
+@dataclass
+class OrgInfo:
+    id: str
 
 async def create_workspace_implementation(org_id, workspace_name):
     analytics_client = get_analytics_client_instance()
@@ -11,7 +18,15 @@ async def create_workspace_implementation(org_id, workspace_name):
                 org_id = org.get("orgId")
                 break
         if org_id is None or org_id == '-1':
-            return "Unable to determine default organization ID."
+            try:
+                ctx = get_context()
+                org_info = await ctx.elicit(
+                    message="Default Organization ID not found. Please provide the organization ID",
+                    response_type=OrgInfo
+                )
+                org_id = org_info.data.id
+            except Exception as e:
+                return "Unable to determine default organization ID."
 
 
     org = analytics_client.get_org_instance(org_id)
