@@ -20,13 +20,13 @@ Settings.HOSTED_LOCATION = "REMOTE"
 
 
 mcp_server = mcp.http_app(transport="streamable-http", path="/mcp")
-
 app = FastAPI(lifespan=mcp_server.lifespan)
 app.add_middleware(AuthMiddleware)
-app.add_middleware(SessionMiddleware, secret_key="YOUR_VERY_SECURE_SECRET")
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY","supersecretkey"))
 app.include_router(authRouter, prefix="")
 app.mount("/analytics", mcp_server)
 
+# This is required for testing with inspector. Uncomment when needed.
 # app.add_middleware(
 #     CORSMiddleware,
 #     allow_origins=["http://localhost:6274"],
