@@ -11,6 +11,7 @@ from remote_auth import AuthMiddleware
 from config import Settings
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 
 Settings.HOSTED_LOCATION = "REMOTE"
@@ -19,12 +20,16 @@ Settings.HOSTED_LOCATION = "REMOTE"
 # debugpy.listen(("0.0.0.0", 5678))
 
 
-mcp_server = mcp.http_app(transport="streamable-http", path="/mcp")
+
+mcp_server = mcp.http_app(transport="streamable-http", path="/")
 app = FastAPI(lifespan=mcp_server.lifespan)
+app.mount("/static", StaticFiles(directory="src/static"), name="static")
 app.add_middleware(AuthMiddleware)
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY","supersecretkey"))
 app.include_router(authRouter, prefix="")
-app.mount("/analytics", mcp_server)
+app.mount("/mcp", mcp_server)
+
+
 
 # This is required for testing with inspector. Uncomment when needed.
 # app.add_middleware(

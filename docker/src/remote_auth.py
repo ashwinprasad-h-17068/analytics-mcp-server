@@ -52,6 +52,8 @@ from html import escape
 import httpx
 from logging_util import get_logger
 import asyncio
+from fastapi.responses import FileResponse
+import base64, hashlib, hmac, re
 
 logger = get_logger(__name__)
 
@@ -74,6 +76,7 @@ UNAUTHENTICATED_PATHS = {
 
 UNAUTHENTICATED_PREFIXES = (
     "/.well-known/",
+    "/static/"
 )
 
 class DynamicClientRegistrationRequest(BaseModel):
@@ -148,7 +151,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """
 
 
-    def _unauthorized_response(self, detail: str) -> JSONResponse:
+    def _unauthorized_response(self, detail: str, error: str = "unauthorized") -> JSONResponse:
         """Constructs the standardized 401 Unauthorized JSON response."""
         try:
             base = Settings.MCP_SERVER_PUBLIC_URL.rstrip("/") + "/"
@@ -157,7 +160,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             
         return JSONResponse(
             status_code=HTTP_401_UNAUTHORIZED,
-            content={"error": "unauthorized", "error_description": detail},
+            content={"error": error, "error_description": detail},
             headers={
                 "WWW-Authenticate": 
                     f'Bearer realm="OAuth", resource_metadata="{urljoin(base, ".well-known/oauth-protected-resource")}"'
@@ -194,12 +197,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
             
         except ValueError:
             logger.warning(f"Invalid Authorization header format for path: {path}")
-            return self._unauthorized_response("Invalid Authorization header format")
+            return self._unauthorized_response(detail="Invalid Authorization header format", error="invalid_token")
 
         except Exception as e:
             logger.error(f"Token validation failed for path: {path}", exc_info=True)
-            return self._unauthorized_response("Invalid or expired token")
+            return self._unauthorized_response(detail="Invalid or expired token", error="invalid_token")
         return await call_next(request)
+
+
+
+@authRouter.get("/", response_class=FileResponse)
+def index():
+    return "src/static/index.html"
 
 
 @authRouter.get("/.well-known/oauth-protected-resource")
@@ -216,7 +225,7 @@ async def oauth_protected_resource():
     logger.debug("Serving OAuth protected resource metadata")
     base = Settings.MCP_SERVER_PUBLIC_URL.rstrip("/") + "/"
     return {
-        "resource": urljoin(urljoin(base, "analytics/"),"mcp"),
+        "resource": urljoin(base,"mcp"),
         "authorization_servers": [
             base
         ],
@@ -246,7 +255,8 @@ async def oauth_authorization_server():
         "token_endpoint": urljoin(base, "token"),
         "registration_endpoint": urljoin(base, "register"),
         "scopes_supported": [
-            "ZohoAnalytics.fullaccess.all"
+            "ZohoAnalytics.fullaccess.all",
+            "offline_access"
         ],
         "response_types_supported": [
             "code"
@@ -364,7 +374,7 @@ async def authorize(
     client : DynamicClientRegistrationRequest = REGISTERED_CLIENTS.get(client_id)
     if not client:
         logger.warning(f"Authorization request with invalid client_id: {client_id}")
-        raise HTTPException(status_code=400, detail="invalid_client")
+        return FileResponse("src/static/invalid_token.html", media_type="text/html", status_code=401)
 
     if redirect_uri not in (client.redirect_uris or []):
         logger.warning(f"Authorization request with invalid redirect_uri for client_id: {client_id}")
@@ -713,7 +723,7 @@ async def proxy_callback(
     return RedirectResponse(url=final_redirect_url, status_code=status.HTTP_302_FOUND)
 
 
-async def upstream_token_exchange(code: str) -> dict:
+async def upstream_token_exchange(payload: dict) -> dict:
     """
     ## Upstream Token Exchange
 
@@ -725,18 +735,19 @@ async def upstream_token_exchange(code: str) -> dict:
 authorization code (received during the `/auth/callback` step) for the 
     actual Access Token, Refresh Token, and ID Token from the upstream provider.
     """
-    logger.info("Initiating upstream token exchange")
-    
-    proxy_callback_uri = urljoin(Settings.MCP_SERVER_PUBLIC_URL.rstrip('/') + '/', "auth/callback")
     token_endpoint = urljoin(Settings.OIDC_PROVIDER_BASE_URL.rstrip('/') + '/', "oauth/v2/token")
-    data={
-        "grant_type": "authorization_code",
-        "code": code,
-        "redirect_uri": proxy_callback_uri,
-        "client_id": Settings.OIDC_PROVIDER_CLIENT_ID,
-        "client_secret": Settings.OIDC_PROVIDER_CLIENT_SECRET
-    }
     
+    # Inject static proxy credentials for the upstream provider
+    data = {
+        **payload,
+        "client_id": Settings.OIDC_PROVIDER_CLIENT_ID,
+        "client_secret": Settings.OIDC_PROVIDER_CLIENT_SECRET,
+    }
+
+    # redirect_uri is only needed for the initial authorization_code exchange
+    if payload.get("grant_type") == "authorization_code":
+        data["redirect_uri"] = urljoin(Settings.MCP_SERVER_PUBLIC_URL.rstrip('/') + '/', "auth/callback")
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -745,23 +756,21 @@ authorization code (received during the `/auth/callback` step) for the
                 headers={"Content-Type": "application/x-www-form-urlencoded"}
             )
         response.raise_for_status()
-        logger.info("Upstream token exchange successful")
         return response.json()
     except httpx.HTTPStatusError as e:
-        logger.error(f"Upstream token exchange failed with status {e.response.status_code}", exc_info=True)
-        raise
-    except Exception as e:
-        logger.error("Upstream token exchange failed with unexpected error", exc_info=True)
+        logger.error(f"Upstream error: {e.response.text}")
         raise
 
 
 @authRouter.post("/token")
 async def token_exchange(
     grant_type: str = Form(...),
-    code: str = Form(...),
-    redirect_uri: str = Form(...),
+    code: Optional[str] = Form(None),
+    redirect_uri: Optional[str] = Form(None),
     client_id: str = Form(...),
-    client_secret: str = Form(...)
+    client_secret: str = Form(...),
+    refresh_token: Optional[str] = Form(None),
+    code_verifier: Optional[str] = Form(None)
     ):
     """
     ## OAuth 2.0 Token Exchange Endpoint (Final Step)
@@ -779,53 +788,95 @@ async def token_exchange(
     
 
     logger.info(f"Token exchange requested for client_id: {client_id}")
-    
-    if grant_type != "authorization_code":
-        logger.warning(f"Unsupported grant type requested: {grant_type}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="unsupported_grant_type")
-        
 
     client_data : DynamicClientRegistrationRequest = REGISTERED_CLIENTS.get(client_id)
     if not client_data or client_data.secret != client_secret:
         logger.warning(f"Invalid client credentials for client_id: {client_id}")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid_client")
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "invalid_client",
+                "error_description": (
+                    "The registered client has expired or is invalid. "
+                    "Clear cached MCP credentials and re-authenticate."
+                ),
+                "help_url": "https://your-domain.com/static/invalid_token.html"
+            }
+        )
 
-
-    auth_code_data = AUTHORIZATION_CODES.get(code)
-    if not auth_code_data:
-        logger.warning(f"Token exchange attempted with invalid authorization code for client_id: {client_id}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_grant")
-
-
-    if auth_code_data.client_id != client_id or auth_code_data.redirect_uri.__str__() != redirect_uri:
-        logger.warning(f"Authorization code mismatch for client_id: {client_id}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_grant")
     
+    upstream_payload = {"grant_type": grant_type}
 
-    if ensure_aware_utc(auth_code_data.expires_at) < datetime.now(timezone.utc):
-        logger.warning(f"Expired authorization code used for client_id: {client_id}")
-        AUTHORIZATION_CODES.pop(code, None)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_grant")
+    # 2. Handle Authorization Code Flow
+    if grant_type == "authorization_code":
+        if not code:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="code_required")
+            
+        auth_code_data = AUTHORIZATION_CODES.get(code)
+        if not auth_code_data or auth_code_data.client_id != client_id:
+            logger.warning(f"Invalid or mismatched code for client: {client_id}")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_grant")
+
+        if ensure_aware_utc(auth_code_data.expires_at) < datetime.now(timezone.utc):
+            AUTHORIZATION_CODES.pop(code, None)
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_grant")
+
         
-    
-    upstream_code = auth_code_data.upstream_code
+        validate_pkce(code_verifier=code_verifier, code_challenge=auth_code_data.code_challenge, method=auth_code_data.code_challenge_method)
+        upstream_payload["code"] = auth_code_data.upstream_code
+        AUTHORIZATION_CODES.pop(code, None)
+
+    elif grant_type == "refresh_token":
+        if not refresh_token:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="refresh_token_required")
+        
+        upstream_payload["refresh_token"] = refresh_token
+
+    else:
+        logger.warning(f"Unsupported grant type: {grant_type}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="unsupported_grant_type")
+
 
     try:
-        upstream_tokens = await upstream_token_exchange(
-            code=upstream_code,
-        )
-   
-    except Exception as e:
-        logger.error(f"Upstream token exchange failed for client_id: {client_id}", exc_info=True)
+        upstream_tokens = await upstream_token_exchange(upstream_payload)
+        return JSONResponse(content=upstream_tokens, status_code=status.HTTP_200_OK)
+    except Exception:
+        logger.error(f"Upstream exchange failed for {grant_type}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="upstream_token_exchange_failed")
     
-    response_tokens = {
-        "access_token": upstream_tokens.get("access_token"),
-        "token_type": upstream_tokens.get("token_type", "Bearer"),
-        "expires_in": upstream_tokens.get("expires_in"),
-        "refresh_token": upstream_tokens.get("refresh_token"),
-        "scope": upstream_tokens.get("scope")
-    }
-    logger.info(f"Token exchange completed successfully for client_id: {client_id}")
-    return JSONResponse(content=response_tokens, status_code=status.HTTP_200_OK)
-    
+
+
+_PKCE_VERIFIER_RE = re.compile(r"^[A-Za-z0-9\-._~]{43,128}$")
+
+def _base64url_no_pad(b: bytes) -> str:
+    return base64.urlsafe_b64encode(b).rstrip(b"=").decode("ascii")
+
+def validate_pkce(code_verifier: str | None, code_challenge: str | None, method: str | None):
+    # If no challenge was used in /authorize, there is nothing to validate.
+    # (You may choose to REQUIRE PKCE always; if so, flip this logic.)
+    if not code_challenge:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="invalid_request"  # or "invalid_grant"
+        )
+
+    if not code_verifier:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="invalid_request"  # or "invalid_grant"
+        )
+
+    if not _PKCE_VERIFIER_RE.match(code_verifier):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_request")
+
+    m = (method or "plain").upper()
+    if m == "S256":
+        computed = _base64url_no_pad(hashlib.sha256(code_verifier.encode("ascii")).digest())
+    elif m == "PLAIN":
+        computed = code_verifier
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_request")
+
+    # constant-time compare
+    if not hmac.compare_digest(computed, code_challenge):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_grant")
