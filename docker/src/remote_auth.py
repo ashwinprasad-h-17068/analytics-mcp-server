@@ -32,11 +32,6 @@ with the static limitations of the Zoho Accounts provider.
 """
 
 
-
-
-
-
-
 from fastapi import Request, status, HTTPException, Query, Form, APIRouter
 from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
 from config import Settings, get_analytics_client_instance
@@ -54,6 +49,9 @@ from logging_util import get_logger
 import asyncio
 from fastapi.responses import FileResponse
 import base64, hashlib, hmac, re
+from persistence import PersistenceFactory
+from fastapi.templating import Jinja2Templates
+
 
 logger = get_logger(__name__)
 
@@ -128,13 +126,16 @@ type client_id_type = str
 type transaction_id_type = str
 type code_type = str
 
-REGISTERED_CLIENTS: dict[client_id_type, DynamicClientRegistrationRequest] = {}
+# REGISTERED_CLIENTS: dict[client_id_type, DynamicClientRegistrationRequest] = {}
+# AUTH_TRANSACTIONS: dict[transaction_id_type, AuthorizationTransaction] = {}
+AUTH_TRANSACTION_TTL_SECONDS = 120
+# AUTHORIZATION_CODES: dict[code_type, AuthorizationCode] = {}
+AUTH_CODE_TTL_SECONDS = 120
 
-AUTH_TRANSACTIONS: dict[transaction_id_type, AuthorizationTransaction] = {}
-AUTH_TRANSACTION_TTL_SECONDS = 600
 
-AUTHORIZATION_CODES: dict[code_type, AuthorizationCode] = {}
-AUTH_CODE_TTL_SECONDS = 600
+registed_clients_store = PersistenceFactory.create(DynamicClientRegistrationRequest, scope="registered_clients")
+auth_transactions_store = PersistenceFactory.create(AuthorizationTransaction, scope="auth_transactions")
+auth_codes_store = PersistenceFactory.create(AuthorizationCode, scope="auth_codes")
 
 
 
@@ -295,16 +296,16 @@ async def register_client(payload: DynamicClientRegistrationRequest):
     client_secret = secrets.token_urlsafe(32)
     base = Settings.MCP_SERVER_PUBLIC_URL.rstrip("/") + "/"
 
-
-    REGISTERED_CLIENTS[client_id] = DynamicClientRegistrationRequest(
-        redirect_uris=payload.redirect_uris or [],
-        client_name=payload.client_name,
-        scope=payload.scope,
-        grant_types=payload.grant_types or ["authorization_code", "refresh_token"],
-        response_types=payload.response_types or ["code"],
-        secret=client_secret
-    )
-
+    registed_clients_store.set(client_id,
+        DynamicClientRegistrationRequest(
+            redirect_uris=payload.redirect_uris or [],
+            client_name=payload.client_name,
+            scope=payload.scope,
+            grant_types=payload.grant_types or ["authorization_code", "refresh_token"],
+            response_types=payload.response_types or ["code"],
+            secret=client_secret
+        )
+    , ttl_in_sec=86400)
     logger.info(f"Client registered successfully: client_id={client_id}, client_name={payload.client_name}")
 
     return JSONResponse(content={
@@ -371,7 +372,7 @@ async def authorize(
     endpoint (a step handled *after* user consent).
     """
 
-    client : DynamicClientRegistrationRequest = REGISTERED_CLIENTS.get(client_id)
+    client : DynamicClientRegistrationRequest = registed_clients_store.get(client_id)
     if not client:
         logger.warning(f"Authorization request with invalid client_id: {client_id}")
         return FileResponse("static/invalid_token.html", media_type="text/html", status_code=401)
@@ -383,18 +384,20 @@ async def authorize(
     logger.info(f"Creating authorization transaction for client_id: {client_id}")
     transaction_id = str(uuid.uuid4())
     now = datetime.now(UTC)
-
-    AUTH_TRANSACTIONS[transaction_id] = AuthorizationTransaction(
-        created_at=now,
-        expires_at=now + timedelta(seconds=AUTH_TRANSACTION_TTL_SECONDS),
-        client_id=client_id,
-        redirect_uri=redirect_uri,
-        scope=scope or client.scope or 'ZohoAnalytics.fullaccess.all',
-        state=state,
-        code_challenge=code_challenge,
-        code_challenge_method=code_challenge_method,
+    auth_transactions_store.set(
+        transaction_id,
+        AuthorizationTransaction(
+            created_at=now,
+            expires_at=now + timedelta(seconds=AUTH_TRANSACTION_TTL_SECONDS),
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            scope=scope or client.scope or 'ZohoAnalytics.fullaccess.all',
+            state=state,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
+        ),
+        ttl_in_sec=AUTH_TRANSACTION_TTL_SECONDS
     )
-
 
     base = Settings.MCP_SERVER_PUBLIC_URL.rstrip("/") + "/"
     consent_base = urljoin(base, "consent")
@@ -428,17 +431,19 @@ def validate_csrf_token(request: Request, form_token: str):
 
 
 
+templates = Jinja2Templates(directory="src/templates")
+
 @authRouter.get("/consent", response_class=HTMLResponse)
 async def consent(request: Request, transaction_id: str = Query(...)):
     logger.debug(f"Consent page requested for transaction_id: {transaction_id}")
-    txn: AuthorizationTransaction = AUTH_TRANSACTIONS.get(transaction_id)
+    txn: AuthorizationTransaction = auth_transactions_store.get(transaction_id)
     if not txn:
         logger.warning(f"Invalid or missing transaction for transaction_id: {transaction_id}")
         raise HTTPException(status_code=400, detail="invalid_transaction")
 
     if txn.expires_at < datetime.now(timezone.utc):
         logger.warning(f"Expired transaction for transaction_id: {transaction_id}")
-        AUTH_TRANSACTIONS.pop(transaction_id, None)
+        auth_transactions_store.delete(transaction_id)
         raise HTTPException(status_code=400, detail="transaction_expired")
 
     
@@ -453,6 +458,18 @@ async def consent(request: Request, transaction_id: str = Query(...)):
     app_name = "Model Context Protocol (MCP) Host Application"
     upstream_provider = "Zoho Accounts" 
 
+
+    context = {
+        "request": request,  # Required by FastAPI for TemplateResponse
+        "transaction_id": transaction_id,
+        "client_id": txn.client_id,
+        "scope": txn.scope,
+        "csrf_token": csrf_token,
+        "app_name": "Model Context Protocol (MCP) Host Application",
+        "upstream_provider": "Zoho Accounts"
+    }
+
+    return templates.TemplateResponse("consent.html", context)
     
     html = f"""
     <!DOCTYPE html>
@@ -584,20 +601,15 @@ async def approve_consent(request: Request, transaction_id: str = Form(...),
     validate_csrf_token(request, csrf_token)
 
     logger.info(f"User approved consent for transaction_id: {transaction_id}")
-    txn: AuthorizationTransaction = AUTH_TRANSACTIONS.get(transaction_id)
+    txn: AuthorizationTransaction = auth_transactions_store.get(transaction_id)
     if not txn:
         logger.warning(f"Approval attempted for invalid transaction_id: {transaction_id}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_transaction")
 
     if txn.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc): 
         logger.warning(f"Expired transaction in approval flow for transaction_id: {transaction_id}")
-        AUTH_TRANSACTIONS.pop(transaction_id, None)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="transaction_expired")
-
-    # if txn["expires_at"] < datetime.now(timezone.utc): # UPDATED: Use timezone-aware datetime
-    #     AUTH_TRANSACTIONS.pop(transaction_id, None)
-    #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="transaction_expired")
-    
+        auth_transactions_store.delete(transaction_id)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="transaction_expired")   
 
     upstream_auth_endpoint = urljoin(
         Settings.OIDC_PROVIDER_BASE_URL.rstrip('/') + '/', 
@@ -613,10 +625,6 @@ async def approve_consent(request: Request, transaction_id: str = Form(...),
         "state": transaction_id,
         "access_type": "offline",
         "prompt": "Consent"
-        
-        # Note: PKCE parameters (code_challenge/method) are NOT passed to the upstream
-        # unless the proxy implementation is also fully PKCE-compliant with the upstream.
-        # For a standard 3-legged flow with a server-side proxy, we generally omit them here.
     }
     
     upstream_auth_url = build_url_with_params(upstream_auth_endpoint, upstream_params)
@@ -679,7 +687,7 @@ async def proxy_callback(
     """
     logger.info(f"Received callback from upstream provider for transaction_id: {state}")
     transaction_id = state
-    txn: AuthorizationTransaction = AUTH_TRANSACTIONS.get(transaction_id)
+    txn: AuthorizationTransaction = auth_transactions_store.get(transaction_id)
     
 
     if not txn:
@@ -688,29 +696,32 @@ async def proxy_callback(
 
     if ensure_aware_utc(txn.expires_at) < datetime.now(timezone.utc):
         logger.warning(f"Expired transaction in callback for transaction_id: {transaction_id}")
-        AUTH_TRANSACTIONS.pop(transaction_id, None)
+        auth_transactions_store.delete(transaction_id)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="transaction_expired")
         
 
     logger.debug(f"Storing upstream authorization code for transaction_id: {transaction_id}")
-    # txn["upstream_code"] = code
-    # txn["upstream_location"] = location
-    # txn["upstream_accounts_server"] = accounts_server
     
     new_auth_code = secrets.token_urlsafe(32)
     now = datetime.now(timezone.utc)
     
-    AUTHORIZATION_CODES[new_auth_code] = AuthorizationCode(
-        created_at=now,
-        expires_at=now + timedelta(seconds=AUTH_CODE_TTL_SECONDS),
-        transaction_id=transaction_id,
-        client_id=txn.client_id,
-        redirect_uri=txn.redirect_uri,
-        code_challenge=txn.code_challenge,
-        code_challenge_method=txn.code_challenge_method,
-        upstream_location=location,
-        upstream_code=code
+
+    auth_codes_store.set(
+        new_auth_code,
+        AuthorizationCode(
+            created_at=now,
+            expires_at=now + timedelta(seconds=AUTH_CODE_TTL_SECONDS),
+            transaction_id=transaction_id,
+            client_id=txn.client_id,
+            redirect_uri=txn.redirect_uri,
+            code_challenge=txn.code_challenge,
+            code_challenge_method=txn.code_challenge_method,
+            upstream_location=location,
+            upstream_code=code
+        ),
+        ttl_in_sec=AUTH_CODE_TTL_SECONDS
     )
+
     logger.info(f"Generated proxy authorization code for client_id: {txn.client_id}")
 
     client_params = {
@@ -789,7 +800,7 @@ async def token_exchange(
 
     logger.info(f"Token exchange requested for client_id: {client_id}")
 
-    client_data : DynamicClientRegistrationRequest = REGISTERED_CLIENTS.get(client_id)
+    client_data : DynamicClientRegistrationRequest = registed_clients_store.get(client_id)
     if not client_data or client_data.secret != client_secret:
         logger.warning(f"Invalid client credentials for client_id: {client_id}")
         return JSONResponse(
@@ -804,27 +815,25 @@ async def token_exchange(
             }
         )
 
-    
     upstream_payload = {"grant_type": grant_type}
 
-    # 2. Handle Authorization Code Flow
     if grant_type == "authorization_code":
         if not code:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="code_required")
             
-        auth_code_data = AUTHORIZATION_CODES.get(code)
+        auth_code_data: AuthorizationCode = auth_codes_store.get(code)
         if not auth_code_data or auth_code_data.client_id != client_id:
             logger.warning(f"Invalid or mismatched code for client: {client_id}")
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_grant")
 
         if ensure_aware_utc(auth_code_data.expires_at) < datetime.now(timezone.utc):
-            AUTHORIZATION_CODES.pop(code, None)
+            auth_codes_store.delete(code)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_grant")
 
         
         validate_pkce(code_verifier=code_verifier, code_challenge=auth_code_data.code_challenge, method=auth_code_data.code_challenge_method)
         upstream_payload["code"] = auth_code_data.upstream_code
-        AUTHORIZATION_CODES.pop(code, None)
+        auth_codes_store.delete(code)
 
     elif grant_type == "refresh_token":
         if not refresh_token:
@@ -852,8 +861,6 @@ def _base64url_no_pad(b: bytes) -> str:
     return base64.urlsafe_b64encode(b).rstrip(b"=").decode("ascii")
 
 def validate_pkce(code_verifier: str | None, code_challenge: str | None, method: str | None):
-    # If no challenge was used in /authorize, there is nothing to validate.
-    # (You may choose to REQUIRE PKCE always; if so, flip this logic.)
     if not code_challenge:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
