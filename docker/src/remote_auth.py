@@ -208,7 +208,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 @authRouter.get("/", response_class=FileResponse)
 def index():
-    return "src/static/index.html"
+    return "static/index.html"
 
 
 @authRouter.get("/.well-known/oauth-protected-resource")
@@ -374,7 +374,7 @@ async def authorize(
     client : DynamicClientRegistrationRequest = REGISTERED_CLIENTS.get(client_id)
     if not client:
         logger.warning(f"Authorization request with invalid client_id: {client_id}")
-        return FileResponse("src/static/invalid_token.html", media_type="text/html", status_code=401)
+        return FileResponse("static/invalid_token.html", media_type="text/html", status_code=401)
 
     if redirect_uri not in (client.redirect_uris or []):
         logger.warning(f"Authorization request with invalid redirect_uri for client_id: {client_id}")
@@ -799,8 +799,8 @@ async def token_exchange(
                 "error_description": (
                     "The registered client has expired or is invalid. "
                     "Clear cached MCP credentials and re-authenticate."
-                ),
-                "help_url": "https://your-domain.com/static/invalid_token.html"
+                )
+                # "help_url": "https://your-domain.com/static/invalid_token.html"
             }
         )
 

@@ -23,7 +23,7 @@ Settings.HOSTED_LOCATION = "REMOTE"
 
 mcp_server = mcp.http_app(transport="streamable-http", path="/")
 app = FastAPI(lifespan=mcp_server.lifespan)
-app.mount("/static", StaticFiles(directory="src/static"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 app.add_middleware(AuthMiddleware)
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY","supersecretkey"))
 app.include_router(authRouter, prefix="")
