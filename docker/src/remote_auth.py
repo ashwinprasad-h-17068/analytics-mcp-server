@@ -209,6 +209,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 @authRouter.get("/", response_class=FileResponse)
 def index():
+    # Need to use templates instead of static html and pass in some configs
+    # url needs to be passed which is Settings.MCP_SERVER_PUBLIC_URL + "/mcp"
     return "static/index.html"
 
 
@@ -431,7 +433,7 @@ def validate_csrf_token(request: Request, form_token: str):
 
 
 
-templates = Jinja2Templates(directory="src/templates")
+templates = Jinja2Templates(directory="templates")
 
 @authRouter.get("/consent", response_class=HTMLResponse)
 async def consent(request: Request, transaction_id: str = Query(...)):

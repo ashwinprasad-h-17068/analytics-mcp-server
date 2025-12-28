@@ -10,7 +10,7 @@ import json
 import asyncio
 import traceback
 
-WORKSPACE_RESULT_LIMIT = os.getenv("ANALYTICS_WORKSPACE_LIST_RESULT_SIZE") or 20
+WORKSPACE_RESULT_LIMIT = Settings.ANALYTICS_WORKSPACE_LIST_RESULT_SIZE
 
 @mcp.tool()
 async def get_workspaces_list(include_shared_workspaces: bool, contains_str: str | None = None) -> list[dict]:

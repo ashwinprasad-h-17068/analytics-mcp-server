@@ -3,11 +3,13 @@ import time
 import csv
 import os
 import asyncio
+from config import Settings
 
-QUERY_DATA_ROW_LIMIT = os.getenv("QUERY_DATA_RESULT_ROW_LIMITS") or 20
-QUERY_DATA_POLLING_INTERVAL = os.getenv("QUERY_DATA_POLLING_INTERVAL") or 4
-QUERY_DATA_QUEUE_TIMEOUT = os.getenv("QUERY_DATA_QUEUE_TIMEOUT") or 120
-QUERY_DATA_QUERY_EXECUTION_TIMEOUT = os.getenv("QUERY_DATA_QUERY_EXECUTION_TIMEOUT") or 30
+
+QUERY_DATA_ROW_LIMIT = Settings.QUERY_DATA_RESULT_ROW_LIMITS
+QUERY_DATA_POLLING_INTERVAL = Settings.QUERY_DATA_POLLING_INTERVAL
+QUERY_DATA_QUEUE_TIMEOUT = Settings.QUERY_DATA_QUEUE_TIMEOUT
+QUERY_DATA_QUERY_EXECUTION_TIMEOUT = Settings.QUERY_DATA_QUERY_EXECUTION_TIMEOUT
 
 
 async def poll_job_completion(bulk, job_id, status_messages, polling_interval=None, queue_timeout=None, execution_timeout=None):

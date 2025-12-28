@@ -8,19 +8,41 @@ load_dotenv()
 
 # Need to use pydantic to add validation
 class Settings:
+
+    # General Settings    
+    ACCOUNTS_SERVER_URL = os.getenv("ACCOUNTS_SERVER_URL", "https://accounts.zoho.com")
+    ANALYTICS_SERVER_URL = os.getenv("ANALYTICS_SERVER_URL", "https://analyticsapi.zoho.com")
+
+    ## Tools
+    ANALYTICS_WORKSPACE_LIST_RESULT_SIZE = int(os.getenv("ANALYTICS_WORKSPACE_LIST_RESULT_SIZE") or 20)
+    ANALYTICS_VIEW_LIST_RESULT_SIZE = int(os.getenv("ANALYTICS_VIEW_LIST_RESULT_SIZE") or 15)
+    QUERY_DATA_RESULT_ROW_LIMITS = int(os.getenv("QUERY_DATA_RESULT_ROW_LIMITS") or 20)
+    QUERY_DATA_POLLING_INTERVAL = int(os.getenv("QUERY_DATA_POLLING_INTERVAL") or 4)
+    QUERY_DATA_QUEUE_TIMEOUT = int(os.getenv("QUERY_DATA_QUEUE_TIMEOUT") or 120)
+    QUERY_DATA_QUERY_EXECUTION_TIMEOUT = int(os.getenv("QUERY_DATA_QUERY_EXECUTION_TIMEOUT") or 30)
+
+    # Settings required for Local
     CLIENT_ID = os.getenv("ANALYTICS_CLIENT_ID")
     CLIENT_SECRET = os.getenv("ANALYTICS_CLIENT_SECRET")
     REFRESH_TOKEN = os.getenv("ANALYTICS_REFRESH_TOKEN")
-    ORG_ID = os.getenv("ANALYTICS_ORG_ID", "-1")    
     MCP_DATA_DIR = os.getenv("ANALYTICS_MCP_DATA_DIR")
-    ACCOUNTS_SERVER_URL = os.getenv("ACCOUNTS_SERVER_URL", "https://accounts.zoho.com")
-    ANALYTICS_SERVER_URL = os.getenv("ANALYTICS_SERVER_URL", "https://analyticsapi.zoho.com")
+    ORG_ID = os.getenv("ANALYTICS_ORG_ID", "-1")
     
+    # Settings required for Remote
     OIDC_PROVIDER_BASE_URL = os.getenv("OIDC_PROVIDER_BASE_URL", "")
     OIDC_PROVIDER_CLIENT_ID = os.getenv("OIDC_PROVIDER_CLIENT_ID")
     OIDC_PROVIDER_CLIENT_SECRET = os.getenv("OIDC_PROVIDER_CLIENT_SECRET")
     MCP_SERVER_PUBLIC_URL = os.getenv("MCP_SERVER_PUBLIC_URL")
-    HOSTED_LOCATION = None
+    HOSTED_LOCATION = None # "LOCAL" or "REMOTE", set in startup
+    SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "supersecretkey")
+    PORT = int(os.getenv("PORT","4000"))
+
+
+    ## Persistence Settings for Remote
+    STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "memory").lower()
+    REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+    REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+
 
 
 def get_access_token():

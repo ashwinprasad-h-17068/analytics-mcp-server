@@ -6,6 +6,8 @@ import os
 import time
 import asyncio
 from logging_util import get_logger
+from config import Settings
+from collections import deque
 
 logger = get_logger(__name__)
 
@@ -35,6 +37,7 @@ class InMemoryProvider(PersistenceProvider[T]):
     def __init__(self, model_class: Type[T]):
         super().__init__(model_class)
         self._data: dict[str, str] = {}
+        self._expiry_queue = deque()  # (expiry_time, key)
 
     def set(self, key: str, value: T, ttl_in_sec: Optional[int] = None) -> None:
         self._data[key] = value.model_dump_json()
@@ -87,13 +90,13 @@ class RedisProvider(PersistenceProvider[T]):
 class PersistenceFactory:
     @staticmethod
     def create(model_class: Type[T], scope: str) -> PersistenceProvider[T]:
-        mode = os.getenv("STORAGE_MODE", "memory").lower()
+        mode = Settings.STORAGE_BACKEND
         
         if mode == "redis":
             return RedisProvider(
                 model_class=model_class,
-                host=os.getenv("REDIS_HOST", "localhost"),
-                port=int(os.getenv("REDIS_PORT", 6379)),
+                host=Settings.REDIS_HOST,
+                port=Settings.REDIS_PORT,
                 prefix=scope
             )
         return InMemoryProvider(model_class=model_class)
