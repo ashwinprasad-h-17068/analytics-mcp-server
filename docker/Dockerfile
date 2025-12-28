@@ -1,10 +1,16 @@
-FROM python:3.11-slim
+FROM python:3.13-slim AS base
 
 WORKDIR /app
 
-COPY ./src/ .
 COPY ./requirements.txt .
-
 RUN pip install --no-cache-dir -r requirements.txt
 
-ENTRYPOINT ["python", "main.py"]
+COPY ./src/ .
+
+# stdio image
+FROM base AS stdio
+ENTRYPOINT ["python", "stdio.py"]
+
+# http image
+FROM base AS http
+ENTRYPOINT ["python", "http_server.py"]

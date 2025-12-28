@@ -1,30 +1,57 @@
 from config import get_analytics_client_instance
+import asyncio
+from dataclasses import dataclass
+from fastmcp.server.dependencies import get_context
 
-def create_workspace_implementation(org_id, workspace_name):
+
+@dataclass
+class OrgInfo:
+    id: str
+
+async def create_workspace_implementation(org_id, workspace_name):
     analytics_client = get_analytics_client_instance()
+    if org_id == '-1':
+        # Org ID is set to -1 in remote MCP cases.
+        orgs = await asyncio.to_thread(analytics_client.get_orgs)
+        for org in orgs:
+            if org.get("isDefault"):
+                org_id = org.get("orgId")
+                break
+        if org_id is None or org_id == '-1':
+            try:
+                ctx = get_context()
+                org_info = await ctx.elicit(
+                    message="Default Organization ID not found. Please provide the organization ID",
+                    response_type=OrgInfo
+                )
+                org_id = org_info.data.id
+            except Exception as e:
+                return "Unable to determine default organization ID."
+
+
     org = analytics_client.get_org_instance(org_id)
-    result = org.create_workspace(workspace_name)
+    result = await asyncio.to_thread(org.create_workspace, workspace_name)
     return f"Workspace '{workspace_name}' created successfully. Workspace Id : {result}"
 
 
-def create_table_implementation(org_id, workspace_id, table_name, columns_list):
+async def create_table_implementation(org_id, workspace_id, table_name, columns_list):
     analytics_client = get_analytics_client_instance()
     table_design = {}
     table_design["TABLENAME"] = table_name
     table_design["COLUMNS"] = columns_list
     workspace = analytics_client.get_workspace_instance(org_id, workspace_id)
-    table_id = workspace.create_table(table_design)
+    table_id = await asyncio.to_thread(workspace.create_table, table_design)
     return "Table created successfully. Table Id : " + str(table_id)
 
 
-def create_aggregate_formula_implementation(org_id, workspace_id, table_id, expression, formula_name):
+async def create_aggregate_formula_implementation(org_id, workspace_id, table_id, expression, formula_name):
     analytics_client = get_analytics_client_instance()
     view = analytics_client.get_view_instance(org_id, workspace_id, table_id)
-    result = view.add_aggregate_formula(formula_name, expression)
+    result = await asyncio.to_thread(view.add_aggregate_formula, formula_name, expression)
     return "Aggregate formula created successfully. Formula Id : " + str(result)
 
 
-def create_chart_report_implementation(org_id, workspace_id, table_name, chart_name, chart_details, filters=None):
+async def create_chart_report_implementation(org_id, workspace_id, table_name, chart_name, chart_details, filters=None):
     if "chartType" not in chart_details:
         return "Chart type is required. Please provide 'chartType' in chart_details."
 
@@ -76,11 +103,11 @@ def create_chart_report_implementation(org_id, workspace_id, table_name, chart_n
 
     analytics_client = get_analytics_client_instance()
     workspace = analytics_client.get_workspace_instance(org_id, workspace_id)
-    report_id = workspace.create_report(config)
+    report_id = await asyncio.to_thread(workspace.create_report, config)
     return f"Chart report created successfully. Report ID: {report_id}"
 
 
-def create_pivot_report_implementation(org_id, workspace_id, table_name, report_name, pivot_details, filters=None):
+async def create_pivot_report_implementation(org_id, workspace_id, table_name, report_name, pivot_details, filters=None):
     if not pivot_details:
         return "Pivot details must be provided."
 
@@ -129,11 +156,11 @@ def create_pivot_report_implementation(org_id, workspace_id, table_name, report_
 
     analytics_client = get_analytics_client_instance()
     workspace = analytics_client.get_workspace_instance(org_id, workspace_id)
-    report_id = workspace.create_report(config)
+    report_id = await asyncio.to_thread(workspace.create_report, config)
     return f"Pivot report created successfully. Report ID: {report_id}"
 
 
-def create_summary_report_implementation(org_id, workspace_id, table_name, report_name, summary_details, filters=None):
+async def create_summary_report_implementation(org_id, workspace_id, table_name, report_name, summary_details, filters=None):
     if "group_by" not in summary_details or "aggregate" not in summary_details:
         return "Both 'group_by' and 'aggregate' must be provided in summary_details."
 
@@ -188,19 +215,19 @@ def create_summary_report_implementation(org_id, workspace_id, table_name, repor
 
     analytics_client = get_analytics_client_instance()
     workspace = analytics_client.get_workspace_instance(org_id, workspace_id)
-    report_id = workspace.create_report(config)
+    report_id = await asyncio.to_thread(workspace.create_report,config)
     return f"Summary report created successfully. Report ID: {report_id}"
 
 
-def create_query_table_implementation(org_id, workspace_id, table_name, query):
+async def create_query_table_implementation(org_id, workspace_id, table_name, query):
     analytics_client = get_analytics_client_instance()
     workspace = analytics_client.get_workspace_instance(org_id, workspace_id)
-    result = workspace.create_query_table(query, table_name)
+    result = await asyncio.to_thread(workspace.create_query_table,query, table_name)
     return f"Query table created successfully. Table Id : {result}"
 
 
-def delete_view_implementation(org_id, workspace_id, view_id):
+async def delete_view_implementation(org_id, workspace_id, view_id):
     analytics_client = get_analytics_client_instance()
     view_instance = analytics_client.get_view_instance(org_id, workspace_id, view_id)
-    view_instance.delete()
+    await asyncio.to_thread(view_instance.delete)
     return f"View with ID {view_id} deleted successfully."

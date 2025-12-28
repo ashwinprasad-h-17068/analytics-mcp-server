@@ -1,5 +1,5 @@
 from mcp_instance import mcp
-from config import Config, get_analytics_client_instance
+from config import get_analytics_client_instance, Settings
 from utils.metadata_util import filter_and_limit_workspaces, get_views
 import os
 from utils.common import retry_with_fallback
@@ -7,9 +7,10 @@ from fastmcp import Context
 from fastmcp.server.dependencies import get_context
 import math
 import json
+import asyncio
 import traceback
 
-WORKSPACE_RESULT_LIMIT = os.getenv("ANALYTICS_WORKSPACE_LIST_RESULT_SIZE") or 20
+WORKSPACE_RESULT_LIMIT = Settings.ANALYTICS_WORKSPACE_LIST_RESULT_SIZE
 
 @mcp.tool()
 async def get_workspaces_list(include_shared_workspaces: bool, contains_str: str | None = None) -> list[dict]:
@@ -37,7 +38,7 @@ async def get_workspaces_list(include_shared_workspaces: bool, contains_str: str
     try:
         analytics_client = get_analytics_client_instance()
         if not include_shared_workspaces:
-            workspaces = analytics_client.get_owned_workspaces()
+            workspaces = await asyncio.to_thread(analytics_client.get_owned_workspaces)
             return filter_and_limit_workspaces(workspaces, contains_str, owned_flag=True, limit=WORKSPACE_RESULT_LIMIT)
         else:
             workspaces = analytics_client.get_workspaces()
@@ -81,7 +82,7 @@ async def get_view_details(view_id: str) -> dict:
     """
     try:    
         analytics_client = get_analytics_client_instance()
-        view_details = analytics_client.get_view_details(view_id, config={"withInvolvedMetaInfo": True})
+        view_details = await asyncio.to_thread(analytics_client.get_view_details, view_id, config={"withInvolvedMetaInfo": True})
         view_details.pop('orgId')
         view_details.pop('createdByZuId')
         view_details.pop('lastDesignModifiedByZuId')
@@ -134,7 +135,6 @@ async def search_views(
             4 - Summary View: A view that provides a simple tabular summary of your data with aggregate functions applied
             6 - Query Table: A derived table created from a custom SQL query
             7 - Dashboard: A collection of visualizations and reports
-        - ctx (Context | None): Context for async operations - required for natural language search.
         - org_id (str | None): Organization ID. Defaults to config value if not provided.
     </arguments>
 
@@ -145,18 +145,16 @@ async def search_views(
     """
     try:
         if not org_id:
-            org_id = Config.ORG_ID
+            org_id = Settings.ORG_ID
 
         if (view_contains_str is not None and view_contains_str.strip() != "") or (natural_language_query is None or natural_language_query.strip() == ""):
-            return retry_with_fallback([org_id], workspace_id, "WORKSPACE", get_views,workspace_id=workspace_id, allowedViewTypesIds=allowedViewTypesIds, contains_str=view_contains_str, from_relevant_views_tool=False)
+            return await retry_with_fallback([org_id], workspace_id, "WORKSPACE", get_views,workspace_id=workspace_id, allowedViewTypesIds=allowedViewTypesIds, contains_str=view_contains_str, from_relevant_views_tool=False)
     
         else:
-            view_list = retry_with_fallback([org_id], workspace_id, "WORKSPACE",get_views,workspace_id=workspace_id, allowedViewTypesIds=[0, 6], contains_str=None, from_relevant_views_tool=True)
+            view_list = await retry_with_fallback([org_id], workspace_id, "WORKSPACE",get_views,workspace_id=workspace_id, allowedViewTypesIds=[0, 6], contains_str=None, from_relevant_views_tool=True)
             if view_list is None or len(view_list) == 0:
                 return "No views found in the workspace."
             
-
-            # Prepare view data
             view_id_to_details = {}
             transformed_view_list = []
             for view in view_list:
@@ -205,6 +203,8 @@ async def search_views(
                     
                     Strictly provide your output in the following JSON format:
                     {{"relevant_views":[<list-of-top-5-view-ids-in-order-of-relevance>]}}
+
+                    Do not enclose the response in any markdown or code block with json syntax.
                     """
 
                     try:
@@ -216,9 +216,6 @@ async def search_views(
                             sample_supported = False
                         break
 
-
-                    if response_string.type != "text":
-                        return "Error in processing the RAG response. Please try again."
                     
                     log_message = {
                         "epoch": epoch,
@@ -257,5 +254,6 @@ async def search_views(
 
     
     except Exception as e:
+        ctx = get_context()
         ctx.error(traceback.format_exc())
         return f"An error occurred while fetching views: {e}"
