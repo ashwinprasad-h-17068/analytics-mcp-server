@@ -38,10 +38,14 @@ async def get_workspaces_list(include_shared_workspaces: bool, contains_str: str
     try:
         analytics_client = get_analytics_client_instance()
         if not include_shared_workspaces:
-            workspaces = await asyncio.to_thread(analytics_client.get_owned_workspaces)
+            try:
+                workspaces = await asyncio.to_thread(analytics_client.get_owned_workspaces)
+            except Exception as e:
+                if e.errorCode and e.errorCode == 7301:
+                    return []
             return filter_and_limit_workspaces(workspaces, contains_str, owned_flag=True, limit=WORKSPACE_RESULT_LIMIT)
         else:
-            workspaces = analytics_client.get_workspaces()
+            workspaces = await asyncio.to_thread(analytics_client.get_workspaces)
             owned_result = filter_and_limit_workspaces(
                 workspaces.get("ownedWorkspaces", []), contains_str, owned_flag=True, limit=WORKSPACE_RESULT_LIMIT
             )

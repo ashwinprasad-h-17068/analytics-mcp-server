@@ -193,7 +193,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # The actual call to a protected resource to validate the token's active status.
             # We don't need the result, just that the call succeeded.
             analytics_client = get_analytics_client_instance(token)
-            await asyncio.to_thread(analytics_client.get_owned_workspaces)
+            await asyncio.to_thread(analytics_client.get_orgs)
             logger.debug(f"Token validated successfully for path: {path}")
             
         except ValueError:
