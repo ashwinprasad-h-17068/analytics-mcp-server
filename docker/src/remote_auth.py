@@ -133,9 +133,9 @@ AUTH_TRANSACTION_TTL_SECONDS = 120
 AUTH_CODE_TTL_SECONDS = 120
 
 
-registed_clients_store = PersistenceFactory.create(DynamicClientRegistrationRequest, scope="registered_clients")
-auth_transactions_store = PersistenceFactory.create(AuthorizationTransaction, scope="auth_transactions")
-auth_codes_store = PersistenceFactory.create(AuthorizationCode, scope="auth_codes")
+registed_clients_store = PersistenceFactory.create(DynamicClientRegistrationRequest, scope="rc")
+auth_transactions_store = PersistenceFactory.create(AuthorizationTransaction, scope="at")
+auth_codes_store = PersistenceFactory.create(AuthorizationCode, scope="ac")
 
 
 

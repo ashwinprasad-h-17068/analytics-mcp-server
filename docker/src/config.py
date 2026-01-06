@@ -43,6 +43,16 @@ class Settings:
     REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
     REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 
+    # Catalyst Persistence Settings
+    CATALYST_SDK_APP_NAME = os.getenv("CATALYST_SDK_APP_NAME", "ZohoAnalyticsRemoteMCPServer")
+    CATALYST_PROJECT_ID = os.getenv("CATALYST_PROJECT_ID")
+    CATALYST_ZAID = os.getenv("CATALYST_ZAID")
+    CATALYST_ENVIRONMENT = os.getenv("CATALYST_ENVIRONMENT", "Production")
+    CATALYST_CLIENT_ID = os.getenv("CATALYST_CLIENT_ID")
+    CATALYST_CLIENT_SECRET = os.getenv("CATALYST_CLIENT_SECRET")
+    CATALYST_REFRESH_TOKEN = os.getenv("CATALYST_REFRESH_TOKEN")
+    CATALYST_CACHE_SEGMENT_ID = os.getenv("CATALYST_CACHE_SEGMENT_ID")
+
 
 
 def get_access_token():
