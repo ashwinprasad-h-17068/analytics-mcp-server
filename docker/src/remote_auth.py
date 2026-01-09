@@ -614,7 +614,7 @@ async def approve_consent(request: Request, transaction_id: str = Form(...),
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="transaction_expired")   
 
     upstream_auth_endpoint = urljoin(
-        Settings.OIDC_PROVIDER_BASE_URL.rstrip('/') + '/', 
+        Settings.oidc_provider_base_url().rstrip('/') + '/', 
         "oauth/v2/auth"
     )
 
@@ -748,7 +748,7 @@ async def upstream_token_exchange(payload: dict) -> dict:
 authorization code (received during the `/auth/callback` step) for the 
     actual Access Token, Refresh Token, and ID Token from the upstream provider.
     """
-    token_endpoint = urljoin(Settings.OIDC_PROVIDER_BASE_URL.rstrip('/') + '/', "oauth/v2/token")
+    token_endpoint = urljoin(Settings.oidc_provider_base_url().rstrip('/') + '/', "oauth/v2/token")
     
     # Inject static proxy credentials for the upstream provider
     data = {

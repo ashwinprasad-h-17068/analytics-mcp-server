@@ -7,12 +7,10 @@ import asyncio
 from logging_util import get_logger
 from config import Settings
 from collections import deque
-import zcatalyst_sdk
-from zcatalyst_sdk import credentials
-from zcatalyst_sdk.types import ICatalystOptions
 import math
 from dataclasses import dataclass
 import threading
+from CatalystClient import CatalystCache
 
 
 logger = get_logger(__name__)
@@ -106,62 +104,13 @@ class CatalystSDKConfig:
 
 
 
-
-
-class CatalystAppRegistry:
-    """
-    Thread-safe registry for Catalyst SDK app instances.
-    """
-
-    _lock = threading.Lock()
-    _apps: Dict[Tuple[int, str, str], object] = {}
-
-
-    @staticmethod
-    def _get_option(options: ICatalystOptions, key: str):
-        if isinstance(options, dict):
-            return options.get(key)
-        return getattr(options, key)
-
-    @classmethod
-    def get_app(
-        cls,
-        *,
-        credential: credentials.RefreshTokenCredential,
-        options: ICatalystOptions,
-        app_name: str,
-    ):
-        project_id = cls._get_option(options, "project_id")
-        environment = cls._get_option(options, "environment")
-
-        if project_id is None or environment is None:
-            raise ValueError("Invalid Catalyst options: project_id/environment missing")
-
-        key = (project_id, environment, app_name)
-        app = cls._apps.get(key)
-        if app is not None:
-            return app
-
-        with cls._lock:
-            app = cls._apps.get(key)
-            if app is not None:
-                return app
-                
-            app = zcatalyst_sdk.initialize_app(
-                credential=credential,
-                options=options,
-                name=app_name,
-            )
-            cls._apps[key] = app
-            return app
-
-
 class CatalystCacheProvider(PersistenceProvider[T]):
     """
-    PersistenceProvider using Zoho Catalyst Cloud Scale Cache.
+    Async PersistenceProvider using Zoho Catalyst Cloud Scale Cache via REST API.
 
     - Keys and values in Catalyst cache are strings.
-    - TTL is specified in HOURS in segment.put(key, value, expiry_in_hours).
+    - TTL is specified in HOURS.
+    - Uses direct REST API calls with async/await instead of the Catalyst SDK.
     """
 
     def __init__(
@@ -173,38 +122,39 @@ class CatalystCacheProvider(PersistenceProvider[T]):
     ):
         super().__init__(model_class)
         self.prefix = prefix
-        self._segment_id = segment_id
+        
+        if not segment_id:
+            raise ValueError("segment_id is required for REST API implementation")
+        
+        # Initialize the async REST API cache client
+        self._cache_client = CatalystCache(
+            client_id=cfg.client_id,
+            client_secret=cfg.client_secret,
+            refresh_token=cfg.refresh_token,
+            project_id=str(cfg.project_id),
+            segment_id=segment_id,
+            api_domain=cfg.project_domain,
+            accounts_server_url=self._get_accounts_url(cfg.project_domain)
+        )
 
-        cred_payload = {
-            "refresh_token": cfg.refresh_token,
-            "client_id": cfg.client_id,
-            "client_secret": cfg.client_secret,
+
+
+    @staticmethod
+    def _get_accounts_url(project_domain: str) -> str:
+        region_map = {
+            ".zoho.in": "https://accounts.zoho.in",
+            ".zoho.eu": "https://accounts.zoho.eu",
+            ".zoho.com.au": "https://accounts.zoho.com.au",
+            ".zoho.jp": "https://accounts.zoho.jp",
         }
-        catalyst_credential = credentials.RefreshTokenCredential(cred_payload)
-
-        catalyst_options = ICatalystOptions(
-            project_id=cfg.project_id,
-            project_key=cfg.project_key,     
-            project_domain=cfg.project_domain,
-            environment=cfg.environment,
-        )
-
-        self._catalyst_app = CatalystAppRegistry.get_app(
-            credential=catalyst_credential,
-            options=catalyst_options,
-            app_name=cfg.app_name,
-        )
-
-        cache_service = self._catalyst_app.cache()
-        self._segment = (
-            cache_service.segment(self._segment_id)
-            if self._segment_id
-            else cache_service.segment()
-        )
+        for suffix, url in region_map.items():
+            if project_domain.endswith(suffix):
+                return url
+        return "https://accounts.zoho.com"
 
     def _get_key(self, key: str) -> str:
         return f"{self.prefix}:{key}"
-
+    
     @staticmethod
     def _sec_to_expiry_hours(ttl_in_sec: Optional[int]) -> Optional[int]:
         if ttl_in_sec is None:
@@ -214,27 +164,47 @@ class CatalystCacheProvider(PersistenceProvider[T]):
         return max(1, int(math.ceil(ttl_in_sec / 3600)))
 
     def set(self, key: str, value: T, ttl_in_sec: Optional[int] = None) -> None:
+        """Store the model instance with an optional TTL."""
         full_key = self._get_key(key)
         payload = value.model_dump_json()
-
         expiry_hours = self._sec_to_expiry_hours(ttl_in_sec)
-
-        if expiry_hours is None:
-            self._segment.put(full_key, payload)
-        else:
-            self._segment.put(full_key, payload, expiry_hours)
+        self._cache_client.insert(
+            cache_name=full_key,
+            cache_value=payload,
+            expiry_in_hours=expiry_hours
+        )
 
     def get(self, key: str) -> Optional[T]:
+        """Retrieve and validate the model instance."""
         full_key = self._get_key(key)
-        raw = self._segment.get_value(full_key)
-        if not raw:
+        try:
+            response = self._cache_client.get(full_key)
+            # Response structure: {"status": "success", "data": {"cache_value": "...", ...}}
+            if response and response.get("status") == "success":
+                data = response.get("data", {})
+                raw_value = data.get("cache_value")
+                if raw_value:
+                    return self.model_class.model_validate_json(raw_value)
             return None
-        return self.model_class.model_validate_json(raw)
+        except Exception:
+            return None
 
     def delete(self, key: str) -> None:
+        """Remove the key from storage."""
         full_key = self._get_key(key)
-        self._segment.delete(full_key)
+        self._cache_client.delete(full_key)
 
+    def close(self) -> None:
+        """Close the cache client and cleanup resources."""
+        self._cache_client.close()
+        if self._loop and not self._loop.is_closed():
+            self._loop.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
 
 
 class PersistenceFactory:
@@ -254,10 +224,11 @@ class PersistenceFactory:
             cfg = CatalystSDKConfig(
                 project_id=Settings.CATALYST_PROJECT_ID,
                 project_key=Settings.CATALYST_ZAID,
-                environment=Settings.CATALYST_ENVIRONMENT,  # "Development" or "Production"
+                environment=Settings.CATALYST_ENVIRONMENT,
                 client_id=Settings.CATALYST_CLIENT_ID,
                 client_secret=Settings.CATALYST_CLIENT_SECRET,
                 refresh_token=Settings.CATALYST_REFRESH_TOKEN,
+                project_domain=Settings.CATALYST_PROJECT_DOMAIN,
                 app_name=Settings.CATALYST_SDK_APP_NAME,
             )
             return CatalystCacheProvider(

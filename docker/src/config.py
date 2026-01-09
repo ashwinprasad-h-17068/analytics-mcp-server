@@ -3,14 +3,41 @@ from AnalyticsClient import AnalyticsClient
 from dotenv import load_dotenv
 from fastmcp.server.dependencies import get_http_request
 from starlette.requests import Request
+from urllib.parse import urlparse
 
 load_dotenv()
 
-# Need to use pydantic to add validation
+
 class Settings:
 
-    # General Settings    
-    ACCOUNTS_SERVER_URL = os.getenv("ACCOUNTS_SERVER_URL", "https://accounts.zoho.com")
+    @staticmethod
+    def _get_accounts_url(project_domain: str) -> str:
+        region_map = {
+            ".zoho.in": "https://accounts.zoho.in",
+            ".zoho.eu": "https://accounts.zoho.eu",
+            ".zoho.com.au": "https://accounts.zoho.com.au",
+            ".zoho.jp": "https://accounts.zoho.jp",
+        }
+        for suffix, url in region_map.items():
+            if project_domain.endswith(suffix):
+                return url
+        return "https://accounts.zoho.com"
+
+    @classmethod
+    def _analytics_domain(cls) -> str:
+        return urlparse(cls.ANALYTICS_SERVER_URL).netloc
+
+    @classmethod
+    def accounts_server_url(cls) -> str:
+        return cls._get_accounts_url(cls._analytics_domain())
+
+
+    @classmethod
+    def oidc_provider_base_url(cls) -> str:
+        return cls.accounts_server_url()
+
+
+    # General Settings
     ANALYTICS_SERVER_URL = os.getenv("ANALYTICS_SERVER_URL", "https://analyticsapi.zoho.com")
 
     ## Tools
@@ -28,8 +55,7 @@ class Settings:
     MCP_DATA_DIR = os.getenv("ANALYTICS_MCP_DATA_DIR")
     ORG_ID = os.getenv("ANALYTICS_ORG_ID", "-1")
     
-    # Settings required for Remote
-    OIDC_PROVIDER_BASE_URL = os.getenv("OIDC_PROVIDER_BASE_URL", "")
+
     OIDC_PROVIDER_CLIENT_ID = os.getenv("OIDC_PROVIDER_CLIENT_ID")
     OIDC_PROVIDER_CLIENT_SECRET = os.getenv("OIDC_PROVIDER_CLIENT_SECRET")
     MCP_SERVER_PUBLIC_URL = os.getenv("MCP_SERVER_PUBLIC_URL")
@@ -52,6 +78,7 @@ class Settings:
     CATALYST_CLIENT_SECRET = os.getenv("CATALYST_CLIENT_SECRET")
     CATALYST_REFRESH_TOKEN = os.getenv("CATALYST_REFRESH_TOKEN")
     CATALYST_CACHE_SEGMENT_ID = os.getenv("CATALYST_CACHE_SEGMENT_ID")
+    CATALYST_PROJECT_DOMAIN = os.getenv("CATALYST_PROJECT_DOMAIN", "https://api.catalyst.zoho.in")
 
 
 
@@ -76,7 +103,7 @@ def get_analytics_client_instance(access_token = None) -> AnalyticsClient:
         if access_token is None:
             access_token = get_access_token()
         client = AnalyticsClient.from_access_token(access_token)
-        client.accounts_server_url = Settings.ACCOUNTS_SERVER_URL
+        client.accounts_server_url = Settings.accounts_server_url()
         client.analytics_server_url = Settings.ANALYTICS_SERVER_URL
         return client
 
@@ -84,9 +111,9 @@ def get_analytics_client_instance(access_token = None) -> AnalyticsClient:
     global analytics_client
     if not analytics_client:
         analytics_client = AnalyticsClient.from_refresh_token(Settings.CLIENT_ID,  Settings.CLIENT_SECRET,  Settings.REFRESH_TOKEN)
-        if Settings.ACCOUNTS_SERVER_URL is None or Settings.ANALYTICS_SERVER_URL is None:
+        if Settings.accounts_server_url() is None or Settings.ANALYTICS_SERVER_URL is None:
             raise RuntimeError("ACCOUNTS_SERVER_URL (or) ANALYTICS_SERVER_URL environment variable is not set. Please set it to your Zoho Analytics accounts server URL and analytics server URL respectively.")
-        analytics_client.accounts_server_url = Settings.ACCOUNTS_SERVER_URL
+        analytics_client.accounts_server_url = Settings.accounts_server_url()
         analytics_client.analytics_server_url = Settings.ANALYTICS_SERVER_URL
     return analytics_client
     
