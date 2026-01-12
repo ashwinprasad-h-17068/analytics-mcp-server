@@ -455,18 +455,14 @@ async def consent(request: Request, transaction_id: str = Query(...)):
 
     csrf_token = generate_csrf_token(request)
     csrf_token_escaped = escape(csrf_token)
-    
-    # Static info for the UI based on the problem description
-    app_name = "Model Context Protocol (MCP) Host Application"
-    upstream_provider = "Zoho Accounts" 
 
 
     context = {
         "request": request,  # Required by FastAPI for TemplateResponse
-        "transaction_id": transaction_id,
-        "client_id": txn.client_id,
-        "scope": txn.scope,
-        "csrf_token": csrf_token,
+        "transaction_id": transaction_id_escaped,
+        "client_id": client_id,
+        "scope": scope,
+        "csrf_token": csrf_token_escaped,
         "app_name": "Model Context Protocol (MCP) Host Application",
         "upstream_provider": "Zoho Accounts"
     }

@@ -21,9 +21,9 @@ from remote_auth import registed_clients_store
 Settings.HOSTED_LOCATION = "REMOTE"
 
 configure_logging(
-    level="DEBUG",              # overall minimum
+    level="INFO",              # overall minimum
     console_level="INFO",       # console: only INFO+
-    file_level="DEBUG",         # file: capture everything
+    file_level="INFO",         # file: capture everything
     log_file="app.log",
     max_bytes=5 * 1024 * 1024,  # 5 MB
     backup_count=3,

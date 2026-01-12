@@ -88,11 +88,10 @@ sse-starlette==2.3.5
 starlette==0.46.2
 typer==0.16.0
 typing-inspection==0.4.1
-typing_extensions==4.12.2
+typing_extensions
 tzdata==2025.2
 urllib3==2.4.0
 uvicorn==0.35.0
 websockets==15.0.1
 wrapt==1.17.3
-zcatalyst_sdk==1.0.3
 zipp==3.23.0
