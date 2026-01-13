@@ -71,9 +71,9 @@ class InMemoryProvider(PersistenceProvider[T]):
 
 
 class RedisProvider(PersistenceProvider[T]):
-    def __init__(self, model_class: Type[T], host: str, port: int, prefix: str):
+    def __init__(self, model_class: Type[T], host: str, port: int, prefix: str, password: str | None = None):
         super().__init__(model_class)
-        self.client = redis.Redis(host=host, port=port, decode_responses=True)
+        self.client = redis.Redis(host=host, port=port, password=password, decode_responses=True)
         self.prefix = prefix
 
     def _get_key(self, key: str) -> str:
@@ -217,6 +217,7 @@ class PersistenceFactory:
                 model_class=model_class,
                 host=Settings.REDIS_HOST,
                 port=Settings.REDIS_PORT,
+                password=Settings.REDIS_PASSWORD,
                 prefix=scope
             )
         

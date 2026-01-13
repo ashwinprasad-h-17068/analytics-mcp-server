@@ -68,6 +68,7 @@ class Settings:
     STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "memory").lower()
     REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
     REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+    REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")  
 
     # Catalyst Persistence Settings
     CATALYST_SDK_APP_NAME = os.getenv("CATALYST_SDK_APP_NAME", "ZohoAnalyticsRemoteMCPServer")
