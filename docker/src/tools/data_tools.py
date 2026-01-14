@@ -188,7 +188,7 @@ async def export_view(workspace_id: str, view_id: str, response_file_format: str
 
 
 @mcp.tool()
-async def query_data(workspace_id: str, sql_query: str, org_id: str | None = None) -> list[dict]:
+async def query_data(workspace_id: str, sql_query: str, org_id: str | None = None) -> str:
     """
     <use_case>
     1. Executes a SQL query on the specified workspace and returns the top 20 rows as results.
@@ -221,7 +221,8 @@ async def query_data(workspace_id: str, sql_query: str, org_id: str | None = Non
         org_id = Settings.ORG_ID
 
     try:
-        return await retry_with_fallback([org_id], workspace_id, "WORKSPACE", query_data_implementation, workspace_id=workspace_id, sql_query=sql_query)
+        res = await retry_with_fallback([org_id], workspace_id, "WORKSPACE", query_data_implementation, workspace_id=workspace_id, sql_query=sql_query)
+        return res.__str__()
     except Exception as e:
         ctx = get_context()
         await ctx.error(traceback.format_exc())

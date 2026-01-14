@@ -2747,7 +2747,6 @@ class ServerError(Exception):
                 self.errorCode = error_data["data"]["errorCode"]
                 self.message = error_data["data"]["errorMessage"]
         except Exception as inst :
-            print(inst)
             self.parseError = inst
 
     def __str__(self):

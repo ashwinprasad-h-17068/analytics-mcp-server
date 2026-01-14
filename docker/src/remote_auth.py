@@ -133,9 +133,9 @@ AUTH_TRANSACTION_TTL_SECONDS = 120
 AUTH_CODE_TTL_SECONDS = 120
 
 
-registed_clients_store = PersistenceFactory.create(DynamicClientRegistrationRequest, scope="registered_clients")
-auth_transactions_store = PersistenceFactory.create(AuthorizationTransaction, scope="auth_transactions")
-auth_codes_store = PersistenceFactory.create(AuthorizationCode, scope="auth_codes")
+registed_clients_store = PersistenceFactory.create(DynamicClientRegistrationRequest, scope="rc")
+auth_transactions_store = PersistenceFactory.create(AuthorizationTransaction, scope="at")
+auth_codes_store = PersistenceFactory.create(AuthorizationCode, scope="ac")
 
 
 
@@ -193,7 +193,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # The actual call to a protected resource to validate the token's active status.
             # We don't need the result, just that the call succeeded.
             analytics_client = get_analytics_client_instance(token)
-            await asyncio.to_thread(analytics_client.get_owned_workspaces)
+            await asyncio.to_thread(analytics_client.get_orgs)
             logger.debug(f"Token validated successfully for path: {path}")
             
         except ValueError:
@@ -455,140 +455,19 @@ async def consent(request: Request, transaction_id: str = Query(...)):
 
     csrf_token = generate_csrf_token(request)
     csrf_token_escaped = escape(csrf_token)
-    
-    # Static info for the UI based on the problem description
-    app_name = "Model Context Protocol (MCP) Host Application"
-    upstream_provider = "Zoho Accounts" 
 
 
     context = {
         "request": request,  # Required by FastAPI for TemplateResponse
-        "transaction_id": transaction_id,
-        "client_id": txn.client_id,
-        "scope": txn.scope,
-        "csrf_token": csrf_token,
+        "transaction_id": transaction_id_escaped,
+        "client_id": client_id,
+        "scope": scope,
+        "csrf_token": csrf_token_escaped,
         "app_name": "Model Context Protocol (MCP) Host Application",
         "upstream_provider": "Zoho Accounts"
     }
 
-    return templates.TemplateResponse("consent.html", context)
-    
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Authorize Access</title>
-        <style>
-            body {{
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                background-color: #f4f7f6;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                min-height: 100vh;
-                margin: 0;
-            }}
-            .container {{
-                max-width: 500px;
-                width: 90%;
-                background-color: white;
-                padding: 30px;
-                border-radius: 8px;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            }}
-            h1 {{
-                color: #333;
-                font-size: 24px;
-                border-bottom: 2px solid #eee;
-                padding-bottom: 10px;
-                margin-bottom: 20px;
-            }}
-            .details-table {{
-                width: 100%;
-                border-collapse: collapse;
-                margin-bottom: 30px;
-            }}
-            .details-table th, .details-table td {{
-                padding: 12px;
-                text-align: left;
-                border-bottom: 1px solid #ddd;
-            }}
-            .details-table th {{
-                background-color: #eef;
-                color: #555;
-                font-weight: 600;
-                width: 40%;
-            }}
-            .details-table td {{
-                color: #333;
-                word-break: break-word; /* Ensure long IDs don't break layout */
-            }}
-            .consent-message {{
-                background-color: #ffffe0;
-                border-left: 5px solid #ffcc00;
-                padding: 15px;
-                margin-bottom: 20px;
-                color: #666;
-            }}
-            form {{
-                text-align: right;
-            }}
-            button {{
-                padding: 10px 25px;
-                background-color: #007bff;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                font-size: 16px;
-                cursor: pointer;
-                transition: background-color 0.3s ease;
-            }}
-            button:hover {{
-                background-color: #0056b3;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>Authorize Access</h1>
-            
-            <p class="consent-message">
-                The {app_name} application is requesting access to your data.
-                By approving, you authorize this proxy to initiate the login process 
-                with your {upstream_provider} account.
-            </p>
-
-            <table class="details-table">
-                <tr>
-                    <th>Application</th>
-                    <td>{app_name}</td>
-                </tr>
-                <tr>
-                    <th>Requested Scope</th>
-                    <td>{scope}</td>
-                </tr>
-                <tr>
-                    <th>Upstream Provider</th>
-                    <td>{upstream_provider}</td>
-                </tr>
-                <tr>
-                    <th>Client ID (MCP)</th>
-                    <td><small>{client_id}</small></td>
-                </tr>
-            </table>
-
-            <form action="/consent/approve" method="post">
-                <input type="hidden" name="transaction_id" value="{transaction_id_escaped}">
-                <input type="hidden" name="csrf_token" value="{csrf_token_escaped}">
-                <button type="submit">✅ Approve and Continue</button>
-            </form>
-        </div>
-    </body>
-    </html>
-    """
-
-    return HTMLResponse(content=html, status_code=200)
-
+    return templates.TemplateResponse(request=request, name="consent.html", context=context)
 
 @authRouter.post("/consent/approve")
 async def approve_consent(request: Request, transaction_id: str = Form(...),
@@ -614,7 +493,7 @@ async def approve_consent(request: Request, transaction_id: str = Form(...),
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="transaction_expired")   
 
     upstream_auth_endpoint = urljoin(
-        Settings.OIDC_PROVIDER_BASE_URL.rstrip('/') + '/', 
+        Settings.oidc_provider_base_url().rstrip('/') + '/', 
         "oauth/v2/auth"
     )
 
@@ -748,7 +627,7 @@ async def upstream_token_exchange(payload: dict) -> dict:
 authorization code (received during the `/auth/callback` step) for the 
     actual Access Token, Refresh Token, and ID Token from the upstream provider.
     """
-    token_endpoint = urljoin(Settings.OIDC_PROVIDER_BASE_URL.rstrip('/') + '/', "oauth/v2/token")
+    token_endpoint = urljoin(Settings.oidc_provider_base_url().rstrip('/') + '/', "oauth/v2/token")
     
     # Inject static proxy credentials for the upstream provider
     data = {
