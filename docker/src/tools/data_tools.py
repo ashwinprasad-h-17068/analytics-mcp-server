@@ -229,7 +229,7 @@ async def query_data(workspace_id: str, sql_query: str, org_id: str | None = Non
         return f"An error occurred while executing the query: {e}"
     
 
-if Settings.HOSTED_LOCATION == "REMOTE":
+if Settings.HOSTED_LOCATION == Settings.CONSTANT_REMOTE_HOSTED_LOCATION:
     analyze_file_structure.disable()
     download_file.disable()
     import_data.disable()
