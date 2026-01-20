@@ -62,6 +62,7 @@ class Settings:
     HOSTED_LOCATION = None # "LOCAL" or "REMOTE", set in startup
     SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "supersecretkey")
     PORT = int(os.getenv("PORT","4000"))
+    MCP_SERVER_ORG_IDS = os.getenv("MCP_SERVER_ORG_IDS", "")
 
 
     ## Persistence Settings for Remote
@@ -82,6 +83,17 @@ class Settings:
     CATALYST_PROJECT_DOMAIN = os.getenv("CATALYST_PROJECT_DOMAIN", "https://api.catalyst.zoho.in")
 
 
+    CONSTANT_REMOTE_HOSTED_LOCATION = "REMOTE"
+    CONSTANT_LOCAL_HOSTED_LOCATION = "LOCAL"
+
+
+    @staticmethod
+    def get_allowed_org_ids():
+        """Parse comma-separated org IDs into a list, filtering out empty values."""
+        if not Settings.MCP_SERVER_ORG_IDS:
+            return []
+        return [org_id.strip() for org_id in Settings.MCP_SERVER_ORG_IDS.split(",") if org_id.strip()]
+
 
 def get_access_token():
     """
@@ -100,7 +112,7 @@ def get_analytics_client_instance(access_token = None) -> AnalyticsClient:
     Otherwise, returns (or creates) the singleton client using credentials from Settings.
     """
 
-    if Settings.HOSTED_LOCATION == "REMOTE":
+    if Settings.HOSTED_LOCATION == Settings.CONSTANT_REMOTE_HOSTED_LOCATION:
         if access_token is None:
             access_token = get_access_token()
         client = AnalyticsClient.from_access_token(access_token)

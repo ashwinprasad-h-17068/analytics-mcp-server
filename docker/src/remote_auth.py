@@ -190,10 +190,37 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 logger.warning(f"Empty token value for path: {path}")
                 return self._unauthorized_response("Token value is empty")
             
-            # The actual call to a protected resource to validate the token's active status.
-            # We don't need the result, just that the call succeeded.
             analytics_client = get_analytics_client_instance(token)
-            await asyncio.to_thread(analytics_client.get_orgs)
+            orgs = await asyncio.to_thread(analytics_client.get_orgs)
+
+            allowed_org_ids = Settings.get_allowed_org_ids()
+            if not allowed_org_ids:
+                logger.error("MCP_SERVER_ORG_ID is not properly configured on the server")
+                return self._unauthorized_response(
+                    detail="Server misconfiguration: MCP_SERVER_ORG_ID is not set or empty",
+                    error="server_misconfigured",
+                )
+            
+            try:
+                user_org_ids = {str(o.get("orgId")) for o in (orgs or []) if isinstance(o, dict) and o.get("orgId") is not None}
+            except Exception:
+                logger.warning(f"Unexpected orgs structure returned for path: {path}")
+                return self._unauthorized_response(
+                    detail="Unable to validate organization access for token",
+                    error="invalid_token",
+                )
+            
+            has_access = any(allowed_org in user_org_ids for allowed_org in allowed_org_ids)
+            if not has_access:
+                logger.warning(
+                    f"Token does not have access to any allowed MCP server orgs. "
+                    f"path={path} allowed_orgs={allowed_org_ids} user_orgs={list(user_org_ids)}"
+                )
+                return self._unauthorized_response(
+                    detail="Token is not authorized for any of the required organizations",
+                    error="invalid_token",
+                )          
+
             logger.debug(f"Token validated successfully for path: {path}")
             
         except ValueError:

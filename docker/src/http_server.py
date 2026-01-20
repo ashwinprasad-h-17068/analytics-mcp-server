@@ -18,7 +18,7 @@ from persistence import InMemoryProvider, ttl_cleanup_task
 from remote_auth import registed_clients_store
 
 
-Settings.HOSTED_LOCATION = "REMOTE"
+Settings.HOSTED_LOCATION = Settings.CONSTANT_REMOTE_HOSTED_LOCATION
 
 configure_logging(
     level="INFO",              # overall minimum
