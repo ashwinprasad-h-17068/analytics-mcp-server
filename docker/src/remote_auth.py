@@ -235,10 +235,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 
 @authRouter.get("/", response_class=FileResponse)
-def index():
-    # Need to use templates instead of static html and pass in some configs
-    # url needs to be passed which is Settings.MCP_SERVER_PUBLIC_URL + "/mcp"
-    return "static/index.html"
+def index(request: Request):
+    context = {
+        "request": request,
+        "mcp_url": Settings.MCP_SERVER_PUBLIC_URL.rstrip("/") + "/mcp"
+    }
+    return templates.TemplateResponse(request=request, name="index.html", context=context)
 
 
 @authRouter.get("/.well-known/oauth-protected-resource")
