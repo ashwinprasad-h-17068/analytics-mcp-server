@@ -193,16 +193,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
             analytics_client = get_analytics_client_instance(token)
             orgs = await asyncio.to_thread(analytics_client.get_orgs)
 
-            server_org_id = getattr(Settings, "MCP_SERVER_ORG_ID", None)
-            if not server_org_id:
-                logger.error("MCP_SERVER_ORG_ID is not configured on the server")
+            allowed_org_ids = Settings.get_allowed_org_ids()
+            if not allowed_org_ids:
+                logger.error("MCP_SERVER_ORG_ID is not properly configured on the server")
                 return self._unauthorized_response(
-                    detail="Server misconfiguration: MCP_SERVER_ORG_ID is not set",
+                    detail="Server misconfiguration: MCP_SERVER_ORG_ID is not set or empty",
                     error="server_misconfigured",
                 )
             
             try:
-                org_ids = {str(o.get("orgId")) for o in (orgs or []) if isinstance(o, dict) and o.get("orgId") is not None}
+                user_org_ids = {str(o.get("orgId")) for o in (orgs or []) if isinstance(o, dict) and o.get("orgId") is not None}
             except Exception:
                 logger.warning(f"Unexpected orgs structure returned for path: {path}")
                 return self._unauthorized_response(
@@ -210,14 +210,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     error="invalid_token",
                 )
             
-            if str(server_org_id) not in org_ids:
+            has_access = any(allowed_org in user_org_ids for allowed_org in allowed_org_ids)
+            if not has_access:
                 logger.warning(
-                    f"Token does not have access to MCP server org. path={path} mcp_org_id={server_org_id}"
+                    f"Token does not have access to any allowed MCP server orgs. "
+                    f"path={path} allowed_orgs={allowed_org_ids} user_orgs={list(user_org_ids)}"
                 )
                 return self._unauthorized_response(
-                    detail="Token is not authorized for this organization",
+                    detail="Token is not authorized for any of the required organizations",
                     error="invalid_token",
-                )           
+                )          
 
             logger.debug(f"Token validated successfully for path: {path}")
             

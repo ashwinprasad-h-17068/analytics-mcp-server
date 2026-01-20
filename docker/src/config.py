@@ -62,7 +62,7 @@ class Settings:
     HOSTED_LOCATION = None # "LOCAL" or "REMOTE", set in startup
     SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "supersecretkey")
     PORT = int(os.getenv("PORT","4000"))
-    MCP_SERVER_ORG_ID = os.getenv("MCP_SERVER_ORG_ID")
+    MCP_SERVER_ORG_IDS = os.getenv("MCP_SERVER_ORG_IDS", "")
 
 
     ## Persistence Settings for Remote
@@ -85,6 +85,14 @@ class Settings:
 
     CONSTANT_REMOTE_HOSTED_LOCATION = "REMOTE"
     CONSTANT_LOCAL_HOSTED_LOCATION = "LOCAL"
+
+
+    @staticmethod
+    def get_allowed_org_ids():
+        """Parse comma-separated org IDs into a list, filtering out empty values."""
+        if not Settings.MCP_SERVER_ORG_IDS:
+            return []
+        return [org_id.strip() for org_id in Settings.MCP_SERVER_ORG_IDS.split(",") if org_id.strip()]
 
 
 def get_access_token():
