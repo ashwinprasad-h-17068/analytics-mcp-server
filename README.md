@@ -8,7 +8,8 @@ The Zoho Analytics MCP Server (Beta) implements the Model Context Protocol (MCP)
 
 1. [Docker Image Setup](#1-docker-image-setup)
 2. [Configuring Environment Variables](#2-configuring-environment-variables)
-3. [Integrating with MCP Hosts](#3-integrate-with-mcp-hosts)
+3. [Remote MCP Server Setup (Hosted Option)](#3-remote-mcp-server-setup-hosted-option)
+4. [Integrating with MCP Hosts](#4-integrate-with-mcp-hosts)
     - [Claude Desktop](#claude-desktop-configuration)
     - [VSCode](#vscode-configuration)
     - [Cursor](#cursor-configuration)
@@ -116,7 +117,91 @@ The following is a list of other optional environment variables:
 </table>
 
 
-### 3. Integrate with MCP Hosts
+### 3. Remote MCP Server Setup (Self-Hosted)
+
+Remote MCP lets you host Zoho Analytics MCP once and share it with your organization over HTTP(S), removing local Docker installs, manual OAuth steps, and per-user updates. Authentication, token lifecycle, and upgrades are handled centrally so end users just point their MCP client to a single URL.
+
+**Client configuration**
+
+Any MCP host that supports the HTTP transport can point to your hosted instance:
+
+```json
+{
+  "mcpServers": {
+    "ZohoAnalyticsMCP": {
+      "url": "<hosted-mcp-server-url>",
+      "type": "http"
+    }
+  }
+}
+```
+
+or simply add the <mcp-server-url> in the corresponding location the MCP host requires. Check the documentation of your MCP host for more details.
+
+**Self-hosting Setup Instructions**
+
+1. Register a static OAuth client in the [Zoho Developer Console](https://api-console.zoho.com/) (server-based application). Set the redirect URI to `<your-public-url>/auth/callback` and record the client ID/secret.
+2. Create a `.env` file for the hosted server with the variables below:
+
+<table>
+  <thead>
+    <tr>
+      <th>Variable</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ANALYTICS_SERVER_URL</td>
+      <td>Zoho Analytics API base URL (e.g., https://analyticsapi.zoho.in)</td>
+    </tr>
+    <tr>
+      <td>OIDC_PROVIDER_CLIENT_ID</td>
+      <td>Client ID from the OAuth app</td>
+    </tr>
+    <tr>
+      <td>OIDC_PROVIDER_CLIENT_SECRET</td>
+      <td>Client secret from the OAuth app</td>
+    </tr>
+    <tr>
+      <td>MCP_SERVER_PUBLIC_URL</td>
+      <td>Public HTTPS URL where your Remote MCP server is reachable</td>
+    </tr>
+    <tr>
+      <td>SESSION_SECRET_KEY</td>
+      <td>Random string used for session management</td>
+    </tr>
+    <tr>
+      <td>PORT (optional)</td>
+      <td>Override the default server port (4000)</td>
+    </tr>
+    <tr>
+      <td>MCP_SERVER_ORG_IDS</td>
+      <td>Comma-separated list of Zoho Analytics org IDs whose users are allowed to use the Remote MCP server</td>
+    </tr>
+    <tr>
+      <td>STORAGE_BACKEND</td>
+      <td>"memory" (default) or "redis" for distributed storage</td>
+    </tr>
+    <tr>
+      <td>REDIS_HOST/REDIS_PORT/REDIS_PASSWORD</td>
+      <td>Required only when STORAGE_BACKEND=redis</td>
+    </tr>
+  </tbody>
+</table>
+
+3. Run the Remote MCP container on the host machine:
+
+```bash
+docker run --name remote-mcp-server \
+    --network=host \
+    --env-file .env \
+    zohoanalytics/mcp-server:remote-v1
+```
+
+Once the container is running, share `MCP_SERVER_PUBLIC_URL` with your users; their MCP clients will connect over HTTP without any local setup.
+
+### 4. Integrate with MCP Hosts
 
 Zoho Analytics MCP Server can be integrated with any MCP host. Below are some sample integrations that demonstrate how this can be done.
 
