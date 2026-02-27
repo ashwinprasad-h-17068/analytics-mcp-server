@@ -1,9 +1,9 @@
-from config import get_analytics_client_instance
+from src.config import get_analytics_client_instance
 import time
 import csv
 import os
 import asyncio
-from config import Settings
+from src.config import Settings
 
 
 QUERY_DATA_ROW_LIMIT = Settings.QUERY_DATA_RESULT_ROW_LIMITS

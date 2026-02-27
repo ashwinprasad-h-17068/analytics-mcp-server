@@ -1,6 +1,6 @@
 import tools
-from mcp_instance import mcp
-from config import Settings
+from src.mcp_instance import mcp
+from src.config import Settings
 
 Settings.HOSTED_LOCATION = "LOCAL"
 

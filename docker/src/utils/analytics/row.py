@@ -1,4 +1,4 @@
-from config import get_analytics_client_instance
+from src.config import get_analytics_client_instance
 import asyncio
 
 async def add_row_implementation(org_id, workspace_id, table_id, columns):

@@ -1,9 +1,10 @@
 import os
-from AnalyticsClient import AnalyticsClient
+from src.sdk.analytics_client import AnalyticsClient
 from dotenv import load_dotenv
 from fastmcp.server.dependencies import get_http_request
 from starlette.requests import Request
 from urllib.parse import urlparse
+from ipaddress import ip_address, ip_network, IPv4Network, IPv6Network
 
 load_dotenv()
 
@@ -63,6 +64,12 @@ class Settings:
     SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "supersecretkey")
     PORT = int(os.getenv("PORT","4000"))
     MCP_SERVER_ORG_IDS = os.getenv("MCP_SERVER_ORG_IDS", "")
+    BEHIND_PROXY = os.getenv("BEHIND_PROXY", "False").lower() == "true"
+    TRUSTED_PROXY_LIST: list[IPv4Network | IPv6Network] = (
+        [ip_network(ip.strip(), strict=False) 
+         for ip in os.getenv("TRUSTED_PROXY_LIST", "").split(",") if ip.strip()]
+        if BEHIND_PROXY else []
+    )
 
 
     ## Persistence Settings for Remote

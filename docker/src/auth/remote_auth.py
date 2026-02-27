@@ -32,32 +32,32 @@ with the static limitations of the Zoho Accounts provider.
 """
 
 
-from fastapi import Request, status, HTTPException, Query, Form, APIRouter
+from fastapi import Request, status, HTTPException, Query, Form, APIRouter, Depends
 from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
-from config import Settings, get_analytics_client_instance
+from src.config import Settings, get_analytics_client_instance
 from urllib.parse import urljoin, urlencode, urlparse, urlunparse, parse_qsl, urlunsplit
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.status import HTTP_401_UNAUTHORIZED
 import secrets
-from pydantic import BaseModel, AnyHttpUrl, AnyUrl
-from typing import Optional, Dict
+from pydantic import BaseModel, AnyUrl, Field, field_validator, ConfigDict
+from typing import Literal, Optional, Dict, List
 from datetime import datetime, timedelta, timezone, UTC
 import uuid
 from html import escape 
 import httpx
-from logging_util import get_logger
+from src.logging_util import get_logger
 import asyncio
 from fastapi.responses import FileResponse
 import base64, hashlib, hmac, re
-from persistence import PersistenceFactory
+from src.auth.persistence import PersistenceFactory
 from fastapi.templating import Jinja2Templates
+from src.auth.rate_limiter import RateLimiter, get_client_ip, rate_limit
 
 
 logger = get_logger(__name__)
 
 authRouter = APIRouter()
 
-# --- Configuration ---
 
 UNAUTHENTICATED_PATHS = {
     "/register",
@@ -77,13 +77,105 @@ UNAUTHENTICATED_PREFIXES = (
     "/static/"
 )
 
+
+MAX_STRING_LENGTH = 256
+MAX_SCOPE_LENGTH = 512
+MAX_REDIRECT_URIS = 10
+MAX_GRANT_TYPES = 5
+MAX_RESPONSE_TYPES = 5
+ALLOWED_GRANT_TYPES = {"authorization_code", "refresh_token"}
+ALLOWED_RESPONSE_TYPES = {"code"}
+
+
 class DynamicClientRegistrationRequest(BaseModel):
-    redirect_uris: list[str] | None = None
-    client_name: str | None = None
-    scope: str | None = None
-    grant_types: list[str] | None = None
-    response_types: list[str] | None = None
-    secret: str | None = None
+
+    model_config = ConfigDict(extra="ignore")
+    
+    redirect_uris: Optional[List[str]] = Field(
+        default=None,
+        max_length=MAX_REDIRECT_URIS
+    )
+
+    client_name: Optional[str] = Field(
+        default=None,
+        max_length=MAX_STRING_LENGTH
+    )
+
+    scope: Optional[str] = Field(
+        default=None,
+        max_length=MAX_SCOPE_LENGTH
+    )
+
+    grant_types: Optional[List[str]] = Field(
+        default=None,
+        max_length=MAX_GRANT_TYPES
+    )
+
+    response_types: Optional[List[str]] = Field(
+        default=None,
+        max_length=MAX_RESPONSE_TYPES
+    )
+
+    secret: Optional[str] = Field(
+        default=None,
+        max_length=MAX_STRING_LENGTH
+    )
+
+    @field_validator("redirect_uris", mode="before")
+    @classmethod
+    def validate_redirect_uris(cls, v):
+        if v is None:
+            return v
+        if len(v) > MAX_REDIRECT_URIS:
+            raise ValueError(f"Maximum {MAX_REDIRECT_URIS} redirect_uris allowed")
+        for uri in v:
+            if len(uri) > MAX_STRING_LENGTH:
+                raise ValueError("redirect_uri exceeds max length")
+        return v
+
+    @field_validator("grant_types", mode="before")
+    @classmethod
+    def validate_grant_types(cls, v):
+        if v is None:
+            return v
+        if len(v) > MAX_GRANT_TYPES:
+            raise ValueError(f"Maximum {MAX_GRANT_TYPES} grant_types allowed")
+        for item in v:
+            if len(item) > MAX_STRING_LENGTH:
+                raise ValueError("grant_type exceeds max length")
+        return v
+
+    @field_validator("response_types", mode="before")
+    @classmethod
+    def validate_response_types(cls, v):
+        if v is None:
+            return v
+        if len(v) > MAX_RESPONSE_TYPES:
+            raise ValueError(f"Maximum {MAX_RESPONSE_TYPES} response_types allowed")
+        for item in v:
+            if len(item) > MAX_STRING_LENGTH:
+                raise ValueError("response_type exceeds max length")
+        return v
+
+
+    @field_validator("grant_types")
+    def check_grant_types(cls, v):
+        if v:
+            invalid = set(v) - ALLOWED_GRANT_TYPES
+            if invalid:
+                raise ValueError(f"Invalid grant_types: {invalid}")
+        return v
+    
+
+    @field_validator("response_types")
+    @classmethod
+    def check_response_types(cls, v):
+        if v:
+            invalid = set(v) - ALLOWED_RESPONSE_TYPES
+            if invalid:
+                raise ValueError(f"Invalid response_types: {invalid}")
+        return v
+
 
 
 class AuthorizationTransaction(BaseModel):
@@ -170,6 +262,26 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     
     async def dispatch(self, request: Request, call_next):
+
+        rate_limiter: RateLimiter = request.app.state.global_rate_limiter
+        client_ip = get_client_ip(request)
+        if not client_ip:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content="Unable to determine client IP for rate limiting.",
+            )
+        if await rate_limiter.allow(client_ip) is False:
+            """
+            Apart from the endpoint specific rate limiting, 
+            we also want to have a global rate limiter to prevent overall abuse.
+            Hence, using the global_rate_limiter for all requests regardless of the endpoint.
+            """
+            logger.warning(f"Rate limit exceeded for IP: {client_ip}")
+            return JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                content="Rate limit exceeded. Try again later.",
+            )
+
 
         path = request.url.path
         if path in UNAUTHENTICATED_PATHS or path.startswith(UNAUTHENTICATED_PREFIXES):
@@ -310,7 +422,7 @@ async def oauth_authorization_server():
     }
 
 
-@authRouter.post("/register", status_code=status.HTTP_201_CREATED)
+@authRouter.post("/register", status_code=status.HTTP_201_CREATED, dependencies=[Depends(rate_limit(10,60))])
 async def register_client(payload: DynamicClientRegistrationRequest):
     """
     ## Dynamic Client Registration (DCR) Endpoint
@@ -336,7 +448,7 @@ async def register_client(payload: DynamicClientRegistrationRequest):
             response_types=payload.response_types or ["code"],
             secret=client_secret
         )
-    , ttl_in_sec=86400)
+    , ttl_in_sec=36000)
     logger.info(f"Client registered successfully: client_id={client_id}, client_name={payload.client_name}")
 
     return JSONResponse(content={
@@ -365,14 +477,35 @@ def build_url_with_params(base_uri: str, params: dict[str, str | None]) -> str:
     return urlunparse(new_url)
 
 
-@authRouter.get("/authorize")
+@authRouter.get("/authorize", dependencies=[Depends(rate_limit(10,60))])
 async def authorize(
-        client_id: str = Query(...),
-        redirect_uri: str = Query(...),
-        scope: str = Query(""),
-        state: str | None = Query(None),
-        code_challenge: str | None = Query(None),
-        code_challenge_method: str | None = Query(None)
+        client_id: str = Query(
+            ...,
+            min_length=3,
+            max_length=100,
+            regex=r"^[a-zA-Z0-9_\-\.]+$"
+        ),
+        redirect_uri: str = Query(
+            ...,
+            min_length=10,
+            max_length=1000
+        ),
+        scope: str = Query(
+            "",
+            max_length=100
+        ),
+        state: str | None = Query(
+            None,
+            min_length=8,
+            max_length=500
+        ),
+        code_challenge: str | None = Query(
+            None,
+            min_length=43,
+            max_length=128,
+            regex=r"^[A-Za-z0-9\-._~]+$"
+        ),
+        code_challenge_method: Literal["S256"] | None = Query(None)
     ):
     """
     ## OAuth 2.0 Authorization Endpoint (Initial Step)
@@ -462,10 +595,10 @@ def validate_csrf_token(request: Request, form_token: str):
 
 
 
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="src/templates")
 
-@authRouter.get("/consent", response_class=HTMLResponse)
-async def consent(request: Request, transaction_id: str = Query(...)):
+@authRouter.get("/consent", response_class=HTMLResponse, dependencies=[Depends(rate_limit(10,60))])
+async def consent(request: Request, transaction_id: str = Query(..., max_length=100)):
     logger.debug(f"Consent page requested for transaction_id: {transaction_id}")
     txn: AuthorizationTransaction = auth_transactions_store.get(transaction_id)
     if not txn:
@@ -498,8 +631,8 @@ async def consent(request: Request, transaction_id: str = Query(...)):
 
     return templates.TemplateResponse(request=request, name="consent.html", context=context)
 
-@authRouter.post("/consent/approve")
-async def approve_consent(request: Request, transaction_id: str = Form(...),
+@authRouter.post("/consent/approve", dependencies=[Depends(rate_limit(10,60))])
+async def approve_consent(request: Request, transaction_id: str = Form(..., max_length=100),
                           csrf_token: str = Form(...)
                           ):
     """
@@ -560,11 +693,11 @@ def ensure_aware_utc(dt: datetime) -> datetime:
     return dt
 
 
-@authRouter.get("/auth/callback")
+@authRouter.get("/auth/callback", dependencies=[Depends(rate_limit(10,60))])
 async def proxy_callback(
-    code: str = Query(...), 
-    state: str = Query(...),
-    location: str | None = Query(None)
+    code: str = Query(..., max_length=100), 
+    state: str = Query(..., max_length=100),
+    location: str | None = Query(None, max_length=200)
 ):
     """
     ## 🔄 Proxy Callback Endpoint (Code Brokerage)
@@ -674,7 +807,8 @@ authorization code (received during the `/auth/callback` step) for the
             response = await client.post(
                 token_endpoint,
                 data=data,
-                headers={"Content-Type": "application/x-www-form-urlencoded"}
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=5.0
             )
         response.raise_for_status()
         return response.json()
@@ -683,15 +817,15 @@ authorization code (received during the `/auth/callback` step) for the
         raise
 
 
-@authRouter.post("/token")
+@authRouter.post("/token", dependencies=[Depends(rate_limit(15,60))])
 async def token_exchange(
-    grant_type: str = Form(...),
-    code: Optional[str] = Form(None),
-    redirect_uri: Optional[str] = Form(None),
-    client_id: str = Form(...),
-    client_secret: str = Form(...),
-    refresh_token: Optional[str] = Form(None),
-    code_verifier: Optional[str] = Form(None)
+    grant_type: str = Form(..., max_length=100),
+    code: Optional[str] = Form(None, max_length=200),
+    redirect_uri: Optional[str] = Form(None, max_length=200),
+    client_id: str = Form(..., max_length=100),
+    client_secret: str = Form(..., max_length=200),
+    refresh_token: Optional[str] = Form(None, max_length=200),
+    code_verifier: Optional[str] = Form(None, max_length=500)
     ):
     """
     ## OAuth 2.0 Token Exchange Endpoint (Final Step)

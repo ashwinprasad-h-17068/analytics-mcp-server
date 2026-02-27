@@ -1,16 +1,15 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Type, TypeVar, Generic, Dict, Tuple
 from pydantic import BaseModel
-import redis
 import time
 import asyncio
-from logging_util import get_logger
-from config import Settings
+from src.logging_util import get_logger
+from src.config import Settings
 from collections import deque
 import math
 from dataclasses import dataclass
-import threading
-from CatalystClient import CatalystCache
+from src.sdk.catalyst_client import CatalystCache
+from src.sdk.redis_client import RedisClientSingleton
 
 
 logger = get_logger(__name__)
@@ -73,7 +72,7 @@ class InMemoryProvider(PersistenceProvider[T]):
 class RedisProvider(PersistenceProvider[T]):
     def __init__(self, model_class: Type[T], host: str, port: int, prefix: str, password: str | None = None):
         super().__init__(model_class)
-        self.client = redis.Redis(host=host, port=port, password=password, decode_responses=True)
+        self.client = RedisClientSingleton.get_client()
         self.prefix = prefix
 
     def _get_key(self, key: str) -> str:
@@ -248,5 +247,5 @@ async def ttl_cleanup_task(provider: InMemoryProvider):
         try:
             provider.cleanup_expired()
         except Exception as e:
-            print(f"Cleanup error: {e}")
+            logger.info(f"Cleanup error: {e}")
         await asyncio.sleep(60)

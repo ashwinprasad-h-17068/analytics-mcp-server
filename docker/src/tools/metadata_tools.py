@@ -1,8 +1,8 @@
-from mcp_instance import mcp
-from config import get_analytics_client_instance, Settings
-from utils.metadata_util import filter_and_limit_workspaces, get_views
+from src.mcp_instance import mcp
+from src.config import get_analytics_client_instance, Settings
+from src.utils.analytics.metadata import filter_and_limit_workspaces, get_views
 import os
-from utils.common import retry_with_fallback
+from src.utils.analytics.common import retry_with_fallback
 from fastmcp import Context
 from fastmcp.server.dependencies import get_context
 import math
