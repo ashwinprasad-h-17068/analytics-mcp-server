@@ -422,7 +422,7 @@ async def oauth_authorization_server():
     }
 
 
-@authRouter.post("/register", status_code=status.HTTP_201_CREATED, dependencies=[Depends(rate_limit(10,60))])
+@authRouter.post("/register", status_code=status.HTTP_201_CREATED, dependencies=[Depends(rate_limit(5,60))])
 async def register_client(payload: DynamicClientRegistrationRequest):
     """
     ## Dynamic Client Registration (DCR) Endpoint
@@ -477,7 +477,7 @@ def build_url_with_params(base_uri: str, params: dict[str, str | None]) -> str:
     return urlunparse(new_url)
 
 
-@authRouter.get("/authorize", dependencies=[Depends(rate_limit(10,60))])
+@authRouter.get("/authorize", dependencies=[Depends(rate_limit(5,60))])
 async def authorize(
         client_id: str = Query(
             ...,
@@ -597,7 +597,7 @@ def validate_csrf_token(request: Request, form_token: str):
 
 templates = Jinja2Templates(directory="src/templates")
 
-@authRouter.get("/consent", response_class=HTMLResponse, dependencies=[Depends(rate_limit(10,60))])
+@authRouter.get("/consent", response_class=HTMLResponse, dependencies=[Depends(rate_limit(5,60))])
 async def consent(request: Request, transaction_id: str = Query(..., max_length=100)):
     logger.debug(f"Consent page requested for transaction_id: {transaction_id}")
     txn: AuthorizationTransaction = auth_transactions_store.get(transaction_id)
@@ -631,7 +631,7 @@ async def consent(request: Request, transaction_id: str = Query(..., max_length=
 
     return templates.TemplateResponse(request=request, name="consent.html", context=context)
 
-@authRouter.post("/consent/approve", dependencies=[Depends(rate_limit(10,60))])
+@authRouter.post("/consent/approve", dependencies=[Depends(rate_limit(5,60))])
 async def approve_consent(request: Request, transaction_id: str = Form(..., max_length=100),
                           csrf_token: str = Form(...)
                           ):
@@ -693,7 +693,7 @@ def ensure_aware_utc(dt: datetime) -> datetime:
     return dt
 
 
-@authRouter.get("/auth/callback", dependencies=[Depends(rate_limit(10,60))])
+@authRouter.get("/auth/callback", dependencies=[Depends(rate_limit(5,60))])
 async def proxy_callback(
     code: str = Query(..., max_length=100), 
     state: str = Query(..., max_length=100),
@@ -817,7 +817,7 @@ authorization code (received during the `/auth/callback` step) for the
         raise
 
 
-@authRouter.post("/token", dependencies=[Depends(rate_limit(15,60))])
+@authRouter.post("/token", dependencies=[Depends(rate_limit(5,60))])
 async def token_exchange(
     grant_type: str = Form(..., max_length=100),
     code: Optional[str] = Form(None, max_length=200),

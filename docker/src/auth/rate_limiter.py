@@ -282,6 +282,7 @@ def rate_limit(capacity: int, window_seconds: int):
         client_ip = get_client_ip(request)
 
         if not client_ip:
+            logger.info("Could not determine client IP for rate limiting.")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Unable to determine client IP for rate limiting.",
@@ -291,6 +292,7 @@ def rate_limit(capacity: int, window_seconds: int):
         allowed = await limiter.allow(key)
 
         if not allowed:
+            logger.info(f"Rate limit exceeded for IP {client_ip} on path {request.url.path}")
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Rate limit exceeded. Try again later.",

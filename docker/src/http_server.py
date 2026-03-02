@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
             background_tasks.append(asyncio.create_task(ttl_cleanup_task(store)))
         logger.info("Background TTL schedulers started for InMemoryProviders.")
 
-    app.state.global_rate_limiter = await build_rate_limiter(capacity=50, window_seconds=60)
+    app.state.global_rate_limiter = await build_rate_limiter(capacity=30, window_seconds=60)
     
     for limiter in _rate_limiter_cache.values():
         if isinstance(limiter, InMemoryTokenBucket):
@@ -75,22 +75,26 @@ async def lifespan(app: FastAPI):
 
 
 mcp_server = mcp.http_app(transport="streamable-http", path="/")
-app = FastAPI(lifespan=lifespan)
-app.mount("/static", StaticFiles(directory="src/static"), name="static")
-app.add_middleware(
-    MaxBodySizeMiddleware,
-    max_body_size=1 * 1024 * 1024,  # 1 MB
-)
-app.add_middleware(AuthMiddleware)
+
+def create_app() -> FastAPI:
+    app = FastAPI(lifespan=lifespan)
+    app.mount("/static", StaticFiles(directory="src/static"), name="static")
+    app.add_middleware(
+        MaxBodySizeMiddleware,
+        max_body_size=1 * 1024 * 1024,  # 1 MB
+    )
+    app.add_middleware(AuthMiddleware)
 
 
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
 
-app.add_middleware(SessionMiddleware, secret_key=Settings.SESSION_SECRET_KEY)
-app.include_router(authRouter, prefix="")
-app.mount("/mcp", mcp_server)
+    app.add_middleware(SessionMiddleware, secret_key=Settings.SESSION_SECRET_KEY)
+    app.include_router(authRouter, prefix="")
+    app.mount("/mcp", mcp_server)
+    return app
 
 
+app = create_app()
 
 # This is required for testing with inspector. Uncomment when needed.
 # app.add_middleware(
