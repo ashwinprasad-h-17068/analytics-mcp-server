@@ -51,7 +51,12 @@ from fastapi.responses import FileResponse
 import base64, hashlib, hmac, re
 from src.auth.persistence import PersistenceFactory
 from fastapi.templating import Jinja2Templates
-from src.auth.rate_limiter import RateLimiter, get_client_ip, rate_limit
+from src.auth.rate_limiter import (
+    RateLimiter,
+    get_client_ip,
+    scenario_registration_rate_limit,
+    scenario_standard_rate_limit,
+)
 
 
 logger = get_logger(__name__)
@@ -419,7 +424,14 @@ async def oauth_authorization_server():
     }
 
 
-@authRouter.post("/register", status_code=status.HTTP_201_CREATED, dependencies=[Depends(rate_limit(Settings.OAUTH_STANDARD_RATE_LIMIT_COUNT, Settings.OAUTH_STANDARD_RATE_LIMIT_WINDOW)), Depends(rate_limit(Settings.OAUTH_REGISTRATION_RATE_LIMIT_COUNT, Settings.OAUTH_REGISTRATION_RATE_LIMIT_WINDOW))])
+@authRouter.post(
+    "/register",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[
+        Depends(scenario_standard_rate_limit()),
+        Depends(scenario_registration_rate_limit()),
+    ],
+)
 async def register_client(payload: DynamicClientRegistrationRequest, request: Request):
     """
     ## Dynamic Client Registration (DCR) Endpoint
@@ -463,17 +475,24 @@ async def register_client(payload: DynamicClientRegistrationRequest, request: Re
     stored = client_ip_vs_client_ids_store.get(client_ip)
     client_ids: list[str] = stored.root if stored else []
     client_ids.append(client_id)
-    max_clients = Settings.OAUTH_MAX_CLIENTS_PER_IP
-    client_ids_to_remove = client_ids[:-max_clients] # Get the first N-1 to remove
-    client_ids = client_ids[-max_clients:] # keep last N, drop the rest     
-    client_ip_vs_client_ids_store.set(
-        client_ip,
-        StringList(root=client_ids),
-        ttl_in_sec=Settings.OAUTH_CLIENT_IP_MAPPING_TTL
-    )
-    for old_id in client_ids_to_remove:
-        registed_clients_store.delete(old_id)
-        logger.info(f"Removed old client_id {old_id} for IP {client_ip} …")
+    max_clients = Settings.get_max_clients_per_ip()
+    if max_clients is None:
+        client_ip_vs_client_ids_store.set(
+            client_ip,
+            StringList(root=client_ids),
+            ttl_in_sec=Settings.OAUTH_CLIENT_IP_MAPPING_TTL
+        )
+    else:
+        client_ids_to_remove = client_ids[:-max_clients]  # remove oldest beyond limit
+        client_ids = client_ids[-max_clients:]
+        client_ip_vs_client_ids_store.set(
+            client_ip,
+            StringList(root=client_ids),
+            ttl_in_sec=Settings.OAUTH_CLIENT_IP_MAPPING_TTL
+        )
+        for old_id in client_ids_to_remove:
+            registed_clients_store.delete(old_id)
+            logger.info(f"Removed old client_id {old_id} for IP {client_ip} …")
 
     return JSONResponse(content={
         "client_id": client_id,
@@ -501,7 +520,7 @@ def build_url_with_params(base_uri: str, params: dict[str, str | None]) -> str:
     return urlunparse(new_url)
 
 
-@authRouter.get("/authorize", dependencies=[Depends(rate_limit(Settings.OAUTH_STANDARD_RATE_LIMIT_COUNT, Settings.OAUTH_STANDARD_RATE_LIMIT_WINDOW))])
+@authRouter.get("/authorize", dependencies=[Depends(scenario_standard_rate_limit())])
 async def authorize(
         client_id: str = Query(
             ...,
@@ -621,7 +640,7 @@ def validate_csrf_token(request: Request, form_token: str):
 
 templates = Jinja2Templates(directory="src/templates")
 
-@authRouter.get("/consent", response_class=HTMLResponse, dependencies=[Depends(rate_limit(Settings.OAUTH_STANDARD_RATE_LIMIT_COUNT, Settings.OAUTH_STANDARD_RATE_LIMIT_WINDOW))])
+@authRouter.get("/consent", response_class=HTMLResponse, dependencies=[Depends(scenario_standard_rate_limit())])
 async def consent(request: Request, transaction_id: str = Query(..., max_length=100)):
     logger.debug(f"Consent page requested for transaction_id: {transaction_id}")
     txn: AuthorizationTransaction = auth_transactions_store.get(transaction_id)
@@ -655,7 +674,7 @@ async def consent(request: Request, transaction_id: str = Query(..., max_length=
 
     return templates.TemplateResponse(request=request, name="consent.html", context=context)
 
-@authRouter.post("/consent/approve", dependencies=[Depends(rate_limit(Settings.OAUTH_STANDARD_RATE_LIMIT_COUNT, Settings.OAUTH_STANDARD_RATE_LIMIT_WINDOW))])
+@authRouter.post("/consent/approve", dependencies=[Depends(scenario_standard_rate_limit())])
 async def approve_consent(request: Request, transaction_id: str = Form(..., max_length=100),
                           csrf_token: str = Form(...)
                           ):
@@ -717,7 +736,7 @@ def ensure_aware_utc(dt: datetime) -> datetime:
     return dt
 
 
-@authRouter.get("/auth/callback", dependencies=[Depends(rate_limit(Settings.OAUTH_STANDARD_RATE_LIMIT_COUNT, Settings.OAUTH_STANDARD_RATE_LIMIT_WINDOW))])
+@authRouter.get("/auth/callback", dependencies=[Depends(scenario_standard_rate_limit())])
 async def proxy_callback(
     code: str = Query(..., max_length=100), 
     state: str = Query(..., max_length=100),
@@ -841,7 +860,7 @@ authorization code (received during the `/auth/callback` step) for the
         raise
 
 
-@authRouter.post("/token", dependencies=[Depends(rate_limit(Settings.OAUTH_STANDARD_RATE_LIMIT_COUNT, Settings.OAUTH_STANDARD_RATE_LIMIT_WINDOW))])
+@authRouter.post("/token", dependencies=[Depends(scenario_standard_rate_limit())])
 async def token_exchange(
     grant_type: str = Form(..., max_length=100),
     code: Optional[str] = Form(None, max_length=200),

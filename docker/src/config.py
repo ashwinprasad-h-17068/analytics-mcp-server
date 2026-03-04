@@ -137,11 +137,62 @@ class Settings:
     OAUTH_AUTH_CODE_TTL = int(os.getenv("OAUTH_AUTH_CODE_TTL", "120"))
     OAUTH_REGISTERED_CLIENTS_TTL = int(os.getenv("OAUTH_REGISTERED_CLIENTS_TTL", "36000"))
     OAUTH_CLIENT_IP_MAPPING_TTL = int(os.getenv("OAUTH_CLIENT_IP_MAPPING_TTL", "18000"))
-    OAUTH_STANDARD_RATE_LIMIT_COUNT = int(os.getenv("OAUTH_STANDARD_RATE_LIMIT_COUNT", "5"))
-    OAUTH_STANDARD_RATE_LIMIT_WINDOW = int(os.getenv("OAUTH_STANDARD_RATE_LIMIT_WINDOW", "60"))
-    OAUTH_REGISTRATION_RATE_LIMIT_COUNT = int(os.getenv("OAUTH_REGISTRATION_RATE_LIMIT_COUNT", "10"))
-    OAUTH_REGISTRATION_RATE_LIMIT_WINDOW = int(os.getenv("OAUTH_REGISTRATION_RATE_LIMIT_WINDOW", "3600"))
-    OAUTH_MAX_CLIENTS_PER_IP = int(os.getenv("OAUTH_MAX_CLIENTS_PER_IP", "5"))
+
+    PRIVATE_OAUTH_STANDARD_RATE_LIMIT_COUNT = int(os.getenv("PRIVATE_OAUTH_STANDARD_RATE_LIMIT_COUNT", "5"))
+    PRIVATE_OAUTH_STANDARD_RATE_LIMIT_WINDOW = int(os.getenv("PRIVATE_OAUTH_STANDARD_RATE_LIMIT_WINDOW", "60"))
+    PUBLIC_OAUTH_STANDARD_RATE_LIMIT_COUNT = int(os.getenv("PUBLIC_OAUTH_STANDARD_RATE_LIMIT_COUNT", "100"))
+    PUBLIC_OAUTH_STANDARD_RATE_LIMIT_WINDOW = int(os.getenv("PUBLIC_OAUTH_STANDARD_RATE_LIMIT_WINDOW", "60"))
+
+    PRIVATE_OAUTH_REGISTRATION_RATE_LIMIT_COUNT = int(os.getenv("PRIVATE_OAUTH_REGISTRATION_RATE_LIMIT_COUNT", "10"))
+    PRIVATE_OAUTH_REGISTRATION_RATE_LIMIT_WINDOW = int(os.getenv("PRIVATE_OAUTH_REGISTRATION_RATE_LIMIT_WINDOW", "3600"))
+    PUBLIC_OAUTH_REGISTRATION_RATE_LIMIT_COUNT = int(os.getenv("PUBLIC_OAUTH_REGISTRATION_RATE_LIMIT_COUNT", "50"))
+    PUBLIC_OAUTH_REGISTRATION_RATE_LIMIT_WINDOW = int(os.getenv("PUBLIC_OAUTH_REGISTRATION_RATE_LIMIT_WINDOW", "3600"))
+
+    PRIVATE_OAUTH_MAX_CLIENTS_PER_IP = int(os.getenv("PRIVATE_OAUTH_MAX_CLIENTS_PER_IP", "5"))
+    PUBLIC_OAUTH_MAX_CLIENTS_PER_IP = int(os.getenv("PUBLIC_OAUTH_MAX_CLIENTS_PER_IP", "0"))
+
+    @classmethod
+    def _is_public(cls) -> bool:
+        if cls.DEPOYMENT_SCENARIO not in ("private_network", "public_network"):
+            raise ValueError(
+                f"Invalid DEPOYMENT_SCENARIO: {cls.DEPOYMENT_SCENARIO}. "
+                "Must be 'private_network' or 'public_network'."
+            )
+        return cls.DEPOYMENT_SCENARIO == "public_network"
+
+    @classmethod
+    def get_standard_rate_limit(cls) -> tuple[int, int]:
+        """Return (count, window_seconds) for standard endpoints."""
+        if cls._is_public():
+            return (
+                cls.PUBLIC_OAUTH_STANDARD_RATE_LIMIT_COUNT,
+                cls.PUBLIC_OAUTH_STANDARD_RATE_LIMIT_WINDOW,
+            )
+        return (
+            cls.PRIVATE_OAUTH_STANDARD_RATE_LIMIT_COUNT,
+            cls.PRIVATE_OAUTH_STANDARD_RATE_LIMIT_WINDOW,
+        )
+
+    @classmethod
+    def get_registration_rate_limit(cls) -> tuple[int, int]:
+        """Return (count, window_seconds) for client registration."""
+        if cls._is_public():
+            return (
+                cls.PUBLIC_OAUTH_REGISTRATION_RATE_LIMIT_COUNT,
+                cls.PUBLIC_OAUTH_REGISTRATION_RATE_LIMIT_WINDOW,
+            )
+        return (
+            cls.PRIVATE_OAUTH_REGISTRATION_RATE_LIMIT_COUNT,
+            cls.PRIVATE_OAUTH_REGISTRATION_RATE_LIMIT_WINDOW,
+        )
+
+    @classmethod
+    def get_max_clients_per_ip(cls) -> int | None:
+        """Return the max clients per IP, or None if the limit is disabled."""
+        if cls._is_public():
+            limit = cls.PUBLIC_OAUTH_MAX_CLIENTS_PER_IP
+            return None if limit == 0 else limit
+        return cls.PRIVATE_OAUTH_MAX_CLIENTS_PER_IP
 
 
     @staticmethod
@@ -150,6 +201,12 @@ class Settings:
         if not Settings.MCP_SERVER_ORG_IDS:
             return []
         return [org_id.strip() for org_id in Settings.MCP_SERVER_ORG_IDS.split(",") if org_id.strip()]
+
+
+# Scenario-aware derived values kept for backward compatibility with existing imports
+# Settings.OAUTH_STANDARD_RATE_LIMIT_COUNT, Settings.OAUTH_STANDARD_RATE_LIMIT_WINDOW = Settings.get_standard_rate_limit()
+# Settings.OAUTH_REGISTRATION_RATE_LIMIT_COUNT, Settings.OAUTH_REGISTRATION_RATE_LIMIT_WINDOW = Settings.get_registration_rate_limit()
+# Settings.OAUTH_MAX_CLIENTS_PER_IP = Settings.get_max_clients_per_ip()
 
 
 def get_access_token():

@@ -365,6 +365,18 @@ def rate_limit(capacity: int, window_seconds: int):
     return dependency
 
 
+def scenario_standard_rate_limit():
+    """Rate limit dependency configured for the current deployment scenario."""
+    count, window = Settings.get_standard_rate_limit()
+    return rate_limit(count, window)
+
+
+def scenario_registration_rate_limit():
+    """Registration-specific rate limit dependency for the active scenario."""
+    count, window = Settings.get_registration_rate_limit()
+    return rate_limit(count, window)
+
+
 async def rate_limiter_cleanup_task(limiter: InMemoryTokenBucket, interval_seconds: int = 60):
     logger.info(f"Starting rate limiter cleanup task with interval {interval_seconds} seconds.")
     try:
