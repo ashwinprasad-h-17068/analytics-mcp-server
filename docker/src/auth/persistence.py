@@ -242,7 +242,7 @@ class PersistenceFactory:
 
 
 async def ttl_cleanup_task(provider: InMemoryProvider):
-    logger.debug(f"Starting TTL cleanup task for registered clients store")
+    logger.debug(f"Starting TTL cleanup task for In-memory store")
     while True:
         try:
             provider.cleanup_expired()

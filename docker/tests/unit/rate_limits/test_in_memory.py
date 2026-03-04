@@ -1,3 +1,4 @@
+from src.auth.remote_auth import DynamicClientRegistrationRequest, register_client
 from src.auth.rate_limiter import InMemoryTokenBucket
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -5,6 +6,8 @@ from starlette.requests import Request
 from starlette.datastructures import Headers
 from src.auth.rate_limiter import _Bucket
 import time
+from unittest.mock import MagicMock, patch, ANY
+import uuid
 
 
 class TestInMemoryTokenBucket:
@@ -187,3 +190,95 @@ class TestInMemoryTokenBucket:
             assert cleaned == 1, \
                 "BUG: Entry was not cleaned up because last_access was updated by rejected requests!"
             assert "key1" not in bucket.buckets
+
+
+    @pytest.mark.asyncio
+    async def test_register_client_limits_to_five_per_ip(self):
+
+        test_ip = "192.168.1.1"
+        existing_client_ids = ["id1", "id2", "id3", "id4", "id5"] # Already at limit
+        
+        payload = DynamicClientRegistrationRequest(
+            client_name="New Client",
+            redirect_uris=["https://example.com"],
+            scope="openid",
+            grant_types=["authorization_code"],
+            response_types=["code"]
+        )
+
+        mock_request = MagicMock(spec=Request)
+        
+        with patch("src.auth.remote_auth.get_client_ip", return_value=test_ip), \
+            patch("src.auth.remote_auth.client_ip_vs_client_ids_store") as mock_ip_store, \
+            patch("src.auth.remote_auth.registed_clients_store") as mock_reg_store, \
+            patch("src.auth.remote_auth.Settings") as mock_settings:
+            
+            mock_ip_store.get.return_value = existing_client_ids[:]
+            mock_settings.MCP_SERVER_PUBLIC_URL = "https://api.example.com"
+
+            await register_client(payload, mock_request)
+
+            mock_ip_store.get.assert_called_with(test_ip)
+            args, kwargs = mock_ip_store.set.call_args
+            updated_list = args[1]
+            
+            assert len(updated_list) == 5
+            assert "id1" not in updated_list
+            assert any(isinstance(uuid.UUID(x), uuid.UUID) for x in updated_list if x not in existing_client_ids)
+
+            mock_reg_store.delete.assert_called_once_with("id1")
+
+
+    @pytest.mark.asyncio
+    async def test_register_client_limits_are_per_ip_isolated(self):
+        # 1. Setup
+        ip_a = "192.168.1.1"
+        ip_b = "10.0.0.1"
+        
+        # Both IPs are currently at 4 clients (under the limit of 5)
+        ip_a_existing = ["a1", "a2", "a3", "a4"]
+        ip_b_existing = ["b1", "b2", "b3", "b4"]
+
+        payload = DynamicClientRegistrationRequest(
+            client_name="Test Client",
+            redirect_uris=["https://example.com"],
+            scope="openid"
+        )
+
+        mock_request = MagicMock(spec=Request)
+        
+        with patch("src.auth.remote_auth.get_client_ip") as mock_get_ip, \
+            patch("src.auth.remote_auth.client_ip_vs_client_ids_store") as mock_ip_store, \
+            patch("src.auth.remote_auth.registed_clients_store") as mock_reg_store, \
+            patch("src.auth.remote_auth.Settings") as mock_settings:
+            
+            mock_settings.MCP_SERVER_PUBLIC_URL = "https://api.example.com"
+
+            # --- STEP 1: Register for IP-A ---
+            mock_get_ip.return_value = ip_a
+            mock_ip_store.get.return_value = ip_a_existing[:] 
+            
+            await register_client(payload, mock_request)
+
+            # Verify IP-A's list was updated to 5 items and NO deletions happened
+            assert mock_reg_store.delete.call_count == 0
+            mock_ip_store.set.assert_called_with(ip_a, ANY, ttl_in_sec=18000)
+            
+            # --- STEP 2: Register for IP-B ---
+            mock_get_ip.return_value = ip_b
+            mock_ip_store.get.return_value = ip_b_existing[:] 
+            
+            await register_client(payload, mock_request)
+
+            # --- FINAL ASSERTIONS ---
+            # 1. Deletions should STILL be 0 because both IPs are exactly at 5
+            assert mock_reg_store.delete.call_count == 0
+            
+            # 2. Verify IP-B's set call specifically
+            # This confirms that IP-B's registration didn't interfere with IP-A
+            mock_ip_store.set.assert_called_with(ip_b, ANY, ttl_in_sec=18000)
+            
+            # 3. Double check the list length for the last call (IP-B)
+            last_call_args = mock_ip_store.set.call_args[0]
+            # last_call_args[0] is the key (IP), last_call_args[1] is the list
+            assert len(last_call_args[1]) == 5

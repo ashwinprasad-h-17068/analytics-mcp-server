@@ -273,6 +273,39 @@ def get_client_ip(request: Request) -> str | None:
     return connecting_ip
 
 
+def _is_ip_trusted(client_ip: str) -> bool:
+    if not client_ip:
+        return False
+
+    try:
+        ip_obj = ip_address(client_ip)
+        for network in Settings.TRUSTED_IP_NETWORKS:
+            if ip_obj in network:
+                return True
+    except ValueError:
+        logger.warning(f"Invalid client IP address: {client_ip}")
+        return False
+
+    for pattern in Settings.TRUSTED_IP_REGEX:
+        if pattern.fullmatch(client_ip):
+            return True
+    return False
+
+
+def _is_domain_trusted(request: Request) -> bool:
+    host = request.headers.get("host", "")
+    if not host:
+        return False
+
+    host = host.split(":")[0].lower()
+
+    for pattern in Settings.TRUSTED_DOMAIN_REGEX:
+        if pattern.fullmatch(host):
+            return True
+
+    return False
+
+
 
 def rate_limit(capacity: int, window_seconds: int):
 
@@ -287,12 +320,43 @@ def rate_limit(capacity: int, window_seconds: int):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Unable to determine client IP for rate limiting.",
             )
+        
+    
+        if Settings.DEPOYMENT_SCENARIO == "private_network":
+            key = f"{request.url.path}:{client_ip}"
+
+        
+        elif Settings.DEPOYMENT_SCENARIO == "public_network":
+
+            ip_trusted = _is_ip_trusted(client_ip)
+            domain_trusted = _is_domain_trusted(request)
+
+            if ip_trusted or domain_trusted:
+                key = f"{request.url.path}:{client_ip}"
+
+            else:
+                logger.warning(
+                    f"Blocked request from untrusted IP {client_ip} "
+                    f"on path {request.url.path}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied: request not from trusted network.",
+                )
+        
+        else:
+            logger.error(f"Invalid deployment scenario: {Settings.DEPOYMENT_SCENARIO}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Invalid deployment configuration.",
+            )
+
 
         key = f"{request.url.path}:{client_ip}"
         allowed = await limiter.allow(key)
 
         if not allowed:
-            logger.info(f"Rate limit exceeded for IP {client_ip} on path {request.url.path}")
+            logger.info(f"Rate limit exceeded capacity: {capacity} for IP {client_ip} on path {request.url.path}")
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Rate limit exceeded. Try again later.",

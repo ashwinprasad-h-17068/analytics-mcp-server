@@ -1,10 +1,12 @@
 import os
+from typing import Literal
 from src.sdk.analytics_client import AnalyticsClient
 from dotenv import load_dotenv
 from fastmcp.server.dependencies import get_http_request
 from starlette.requests import Request
 from urllib.parse import urlparse
 from ipaddress import ip_address, ip_network, IPv4Network, IPv6Network
+import re
 
 load_dotenv()
 
@@ -70,7 +72,36 @@ class Settings:
          for ip in os.getenv("TRUSTED_PROXY_LIST", "").split(",") if ip.strip()]
         if BEHIND_PROXY else []
     )
+    DEPOYMENT_SCENARIO: Literal["private_network", "public_network"]  = os.getenv("DEPOYMENT_SCENARIO", "private_network")
+    _RAW_TRUSTED_IP_PATTERNS = [
+        item.strip()
+        for item in os.getenv("TRUSTED_PUBLIC_NETWORKS", "").split(",")
+        if item.strip()
+    ]
 
+    _RAW_TRUSTED_DOMAIN_PATTERNS = [
+        item.strip().lower()
+        for item in os.getenv("TRUSTED_DOMAINS_ALLOWLIST", "").split(",")
+        if item.strip()
+    ]
+
+    # Parsed structures
+    TRUSTED_IP_NETWORKS: list[IPv4Network | IPv6Network] = []
+    TRUSTED_IP_REGEX: list[re.Pattern] = []
+    TRUSTED_DOMAIN_REGEX: list[re.Pattern] = []
+
+    if DEPOYMENT_SCENARIO == "public_network":
+
+        for pattern in _RAW_TRUSTED_IP_PATTERNS:
+            try:
+                # Try CIDR first
+                TRUSTED_IP_NETWORKS.append(ip_network(pattern, strict=False))
+            except ValueError:
+                # Otherwise treat as regex
+                TRUSTED_IP_REGEX.append(re.compile(pattern))
+
+        for pattern in _RAW_TRUSTED_DOMAIN_PATTERNS:
+            TRUSTED_DOMAIN_REGEX.append(re.compile(pattern))
 
     ## Persistence Settings for Remote
     STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "memory").lower()
@@ -92,6 +123,25 @@ class Settings:
 
     CONSTANT_REMOTE_HOSTED_LOCATION = "REMOTE"
     CONSTANT_LOCAL_HOSTED_LOCATION = "LOCAL"
+
+
+    OAUTH_DEFAULT_SCOPE = os.getenv("OAUTH_DEFAULT_SCOPE", "ZohoAnalytics.fullaccess.all")
+    OAUTH_OFFLINE_ACCESS_SCOPE = os.getenv("OAUTH_OFFLINE_ACCESS_SCOPE", "offline_access")
+    OAUTH_MAX_CLIENT_NAME_LENGTH = int(os.getenv("OAUTH_MAX_CLIENT_NAME_LENGTH", "80"))
+    OAUTH_MAX_STRING_LENGTH = int(os.getenv("OAUTH_MAX_STRING_LENGTH", "256"))
+    OAUTH_MAX_SCOPE_LENGTH = int(os.getenv("OAUTH_MAX_SCOPE_LENGTH", "100"))
+    OAUTH_MAX_REDIRECT_URIS = int(os.getenv("OAUTH_MAX_REDIRECT_URIS", "3"))
+    OAUTH_MAX_GRANT_TYPES = int(os.getenv("OAUTH_MAX_GRANT_TYPES", "2"))
+    OAUTH_MAX_RESPONSE_TYPES = int(os.getenv("OAUTH_MAX_RESPONSE_TYPES", "1"))
+    OAUTH_AUTH_TRANSACTION_TTL = int(os.getenv("OAUTH_AUTH_TRANSACTION_TTL", "120"))
+    OAUTH_AUTH_CODE_TTL = int(os.getenv("OAUTH_AUTH_CODE_TTL", "120"))
+    OAUTH_REGISTERED_CLIENTS_TTL = int(os.getenv("OAUTH_REGISTERED_CLIENTS_TTL", "36000"))
+    OAUTH_CLIENT_IP_MAPPING_TTL = int(os.getenv("OAUTH_CLIENT_IP_MAPPING_TTL", "18000"))
+    OAUTH_STANDARD_RATE_LIMIT_COUNT = int(os.getenv("OAUTH_STANDARD_RATE_LIMIT_COUNT", "5"))
+    OAUTH_STANDARD_RATE_LIMIT_WINDOW = int(os.getenv("OAUTH_STANDARD_RATE_LIMIT_WINDOW", "60"))
+    OAUTH_REGISTRATION_RATE_LIMIT_COUNT = int(os.getenv("OAUTH_REGISTRATION_RATE_LIMIT_COUNT", "10"))
+    OAUTH_REGISTRATION_RATE_LIMIT_WINDOW = int(os.getenv("OAUTH_REGISTRATION_RATE_LIMIT_WINDOW", "3600"))
+    OAUTH_MAX_CLIENTS_PER_IP = int(os.getenv("OAUTH_MAX_CLIENTS_PER_IP", "5"))
 
 
     @staticmethod

@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 import asyncio
 from contextlib import asynccontextmanager
 from src.auth.persistence import InMemoryProvider, ttl_cleanup_task
-from src.auth.remote_auth import registed_clients_store, auth_transactions_store, auth_codes_store
+from src.auth.remote_auth import registed_clients_store, auth_transactions_store, auth_codes_store, client_ip_vs_client_ids_store
 from src.auth.rate_limiter import build_rate_limiter, _rate_limiter_cache, rate_limiter_cleanup_task, InMemoryTokenBucket
 from src.utils.security import MaxBodySizeMiddleware
 from fastapi.exceptions import RequestValidationError
@@ -38,14 +38,14 @@ configure_logging(
 
 logger = get_logger(__name__)
 # Uncomment below line to start the debugger
-debugpy.listen(("0.0.0.0", 5678))
+# debugpy.listen(("0.0.0.0", 5678))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
     background_tasks = []
 
-    stores = [registed_clients_store, auth_transactions_store, auth_codes_store]
+    stores = [registed_clients_store, auth_transactions_store, auth_codes_store, client_ip_vs_client_ids_store]
     if any(isinstance(s, InMemoryProvider) for s in stores):
         for store in stores:
             background_tasks.append(asyncio.create_task(ttl_cleanup_task(store)))
