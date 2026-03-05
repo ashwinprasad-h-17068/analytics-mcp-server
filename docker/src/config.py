@@ -6,7 +6,6 @@ from fastmcp.server.dependencies import get_http_request
 from starlette.requests import Request
 from urllib.parse import urlparse
 from ipaddress import ip_address, ip_network, IPv4Network, IPv6Network
-import re
 
 load_dotenv()
 
@@ -72,7 +71,7 @@ class Settings:
          for ip in os.getenv("TRUSTED_PROXY_LIST", "").split(",") if ip.strip()]
         if BEHIND_PROXY else []
     )
-    DEPOYMENT_SCENARIO: Literal["private_network", "public_network"]  = os.getenv("DEPOYMENT_SCENARIO", "private_network")
+    DEPLOYMENT_SCENARIO: Literal["private_network", "public_network"]  = os.getenv("DEPLOYMENT_SCENARIO", "private_network")
     _RAW_TRUSTED_IP_PATTERNS = [
         item.strip()
         for item in os.getenv("TRUSTED_PUBLIC_NETWORKS", "").split(",")
@@ -85,23 +84,25 @@ class Settings:
         if item.strip()
     ]
 
-    # Parsed structures
     TRUSTED_IP_NETWORKS: list[IPv4Network | IPv6Network] = []
-    TRUSTED_IP_REGEX: list[re.Pattern] = []
-    TRUSTED_DOMAIN_REGEX: list[re.Pattern] = []
+    TRUSTED_DOMAINS: list[str] = []
+    CLIENT_IP_HEADER: str = None if os.getenv("CLIENT_IP_HEADER") is None else os.getenv("CLIENT_IP_HEADER")
 
-    if DEPOYMENT_SCENARIO == "public_network":
+    if DEPLOYMENT_SCENARIO == "public_network":
 
         for pattern in _RAW_TRUSTED_IP_PATTERNS:
             try:
-                # Try CIDR first
+                # Parse as CIDR notation only
                 TRUSTED_IP_NETWORKS.append(ip_network(pattern, strict=False))
-            except ValueError:
-                # Otherwise treat as regex
-                TRUSTED_IP_REGEX.append(re.compile(pattern))
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid CIDR notation '{pattern}' in TRUSTED_PUBLIC_NETWORKS. "
+                    f"Only CIDR notation (e.g., '192.168.1.0/24', '10.0.0.0/8') is supported. "
+                    f"Error: {e}"
+                )
 
-        for pattern in _RAW_TRUSTED_DOMAIN_PATTERNS:
-            TRUSTED_DOMAIN_REGEX.append(re.compile(pattern))
+        # Store domains as exact match strings (case-insensitive comparison will be done at check time)
+        TRUSTED_DOMAINS = _RAW_TRUSTED_DOMAIN_PATTERNS
 
     ## Persistence Settings for Remote
     STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "memory").lower()
@@ -138,6 +139,9 @@ class Settings:
     OAUTH_REGISTERED_CLIENTS_TTL = int(os.getenv("OAUTH_REGISTERED_CLIENTS_TTL", "36000"))
     OAUTH_CLIENT_IP_MAPPING_TTL = int(os.getenv("OAUTH_CLIENT_IP_MAPPING_TTL", "18000"))
 
+    GLOBAL_OAUTH_RATE_LIMIT_CAPACITY = int(os.getenv("GLOBAL_OAUTH_RATE_LIMIT_CAPACITY", "30"))
+    GLOBAL_OAUTH_RATE_LIMIT_WINDOW = int(os.getenv("GLOBAL_OAUTH_RATE_LIMIT_WINDOW", "60"))
+
     PRIVATE_OAUTH_STANDARD_RATE_LIMIT_COUNT = int(os.getenv("PRIVATE_OAUTH_STANDARD_RATE_LIMIT_COUNT", "5"))
     PRIVATE_OAUTH_STANDARD_RATE_LIMIT_WINDOW = int(os.getenv("PRIVATE_OAUTH_STANDARD_RATE_LIMIT_WINDOW", "60"))
     PUBLIC_OAUTH_STANDARD_RATE_LIMIT_COUNT = int(os.getenv("PUBLIC_OAUTH_STANDARD_RATE_LIMIT_COUNT", "100"))
@@ -153,12 +157,12 @@ class Settings:
 
     @classmethod
     def _is_public(cls) -> bool:
-        if cls.DEPOYMENT_SCENARIO not in ("private_network", "public_network"):
+        if cls.DEPLOYMENT_SCENARIO not in ("private_network", "public_network"):
             raise ValueError(
-                f"Invalid DEPOYMENT_SCENARIO: {cls.DEPOYMENT_SCENARIO}. "
+                f"Invalid DEPLOYMENT_SCENARIO: {cls.DEPLOYMENT_SCENARIO}. "
                 "Must be 'private_network' or 'public_network'."
             )
-        return cls.DEPOYMENT_SCENARIO == "public_network"
+        return cls.DEPLOYMENT_SCENARIO == "public_network"
 
     @classmethod
     def get_standard_rate_limit(cls) -> tuple[int, int]:

@@ -15,8 +15,9 @@ REGISTER_URL = f"{BASE_URL}/register"
 
 # Mirror limits defined in remote_auth.py
 MAX_STRING_LENGTH = 256
-MAX_SCOPE_LENGTH  = 256
-MAX_REDIRECT_URIS = 5
+MAX_CLIENT_NAME_LENGTH = 80
+MAX_SCOPE_LENGTH  = 100
+MAX_REDIRECT_URIS = 3
 
 
 def test_register_rate_limit():
@@ -124,11 +125,11 @@ def test_oom_via_large_payload_flood():
 
     # Build a URI that is exactly MAX_STRING_LENGTH characters long.
     # Format: "https://" (8) + filler (244) + ".com" (4) = 256
-    _filler = "a" * (MAX_STRING_LENGTH - len("https://") - len(".com"))
+    _filler = "a" * (MAX_CLIENT_NAME_LENGTH - len("https://") - len(".com"))
     max_redirect_uri = f"https://{_filler}.com"
 
     max_payload = {
-        "client_name": "x" * MAX_STRING_LENGTH,
+        "client_name": "x" * MAX_CLIENT_NAME_LENGTH,
         "redirect_uris": [max_redirect_uri] * MAX_REDIRECT_URIS,
         "scope": "s" * MAX_SCOPE_LENGTH,
         "grant_types": ["authorization_code", "refresh_token"],
@@ -229,7 +230,7 @@ def test_oom_via_large_payload_flood():
 
 
 if __name__ == "__main__":
-    # test_register_rate_limit()
-    # test_different_ip_independent_limits()
-    # test_tokens_refill_after_window()
+    test_register_rate_limit()
+    test_different_ip_independent_limits()
+    test_tokens_refill_after_window()
     test_oom_via_large_payload_flood()
