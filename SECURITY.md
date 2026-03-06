@@ -612,6 +612,18 @@ TRUSTED_DOMAINS_ALLOWLIST=api.yourcompany.com  # Your allowed domains
 
 ---
 
+### ⚠️ Warning: Domain Allowlisting Without TLS (Public Network)
+
+**Risk Level**: **HIGH**
+
+**Risk**: Domain-based access control (`TRUSTED_DOMAINS_ALLOWLIST`) works by checking the `Host` header of incoming requests. Any HTTP client can freely set this header to an arbitrary value, meaning a malicious actor can trivially spoof a trusted domain name and bypass domain-based access controls entirely.
+
+**Requirement**: In public network deployments, **TLS must be configured** at your reverse proxy or load balancer. With proper TLS termination, the domain is validated through certificate negotiation before the request ever reaches the application, making Host header spoofing ineffective.
+
+> Domain allowlisting is **not a substitute for TLS** — it is only a meaningful control *on top of* TLS. Exposing this application over plain HTTP on a public network renders `TRUSTED_DOMAINS_ALLOWLIST` protection ineffective.
+
+---
+
 ### ⚠️ Warning: Using Default Session Secret
 
 **Risk Level**: **HIGH**
