@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import ipaddress
 import time
 from collections import defaultdict
 import asyncio
@@ -307,15 +308,25 @@ def _is_ip_trusted(client_ip: str) -> bool:
     return False
 
 
+def _is_ip_address(value: str) -> bool:
+    """Return True if the value is a valid IPv4 or IPv6 address."""
+    try:
+        ipaddress.ip_address(value)
+        return True
+    except ValueError:
+        return False
+
+
 def _is_domain_trusted(request: Request) -> bool:
     host = request.headers.get("host", "")
     if not host:
         return False
 
-    host = host.split(":")[0].lower()
+    host = host.split(":")[0].strip().lower()
+    if _is_ip_address(host):
+        return False
 
-    # Exact domain matching (case-insensitive)
-    return host in Settings.TRUSTED_DOMAINS
+    return any(pattern.fullmatch(host) for pattern in Settings.TRUSTED_DOMAIN_PATTERNS)
 
 
 

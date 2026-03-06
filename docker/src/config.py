@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Literal
 from src.sdk.analytics_client import AnalyticsClient
 from dotenv import load_dotenv
@@ -85,7 +86,9 @@ class Settings:
     ]
 
     TRUSTED_IP_NETWORKS: list[IPv4Network | IPv6Network] = []
-    TRUSTED_DOMAINS: list[str] = []
+    TRUSTED_DOMAIN_PATTERNS = [
+        re.compile(pattern) for pattern in _RAW_TRUSTED_DOMAIN_PATTERNS
+    ]
     CLIENT_IP_HEADER: str = None if os.getenv("CLIENT_IP_HEADER") is None else os.getenv("CLIENT_IP_HEADER")
 
     if DEPLOYMENT_SCENARIO == "public_network":
