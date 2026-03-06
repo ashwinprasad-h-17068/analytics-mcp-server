@@ -26,7 +26,7 @@ class _Bucket:
     last_access: float
 
 
-class InMemoryTokenBucket:
+class InMemoryTokenBucketRateLimiter(RateLimiter):
 
     __slots__ = (
         "capacity",
@@ -47,6 +47,10 @@ class InMemoryTokenBucket:
         self.buckets: Dict[str, _Bucket] = {}
 
     async def allow(self, key: str) -> bool:
+        """
+        Didn't use a lock here since In-Memory Rate Limiter is primarily intended for single-worker deployments and this async 
+        function doesn't yield control during it's execution.
+        """
         now = time.monotonic()
         bucket = self.buckets.get(key)
         if bucket is None:
@@ -199,7 +203,7 @@ async def build_rate_limiter(capacity: int, window_seconds: int) -> RateLimiter:
                 window_seconds=window_seconds,
             )
         else:
-            limiter = InMemoryTokenBucket(
+            limiter = InMemoryTokenBucketRateLimiter(
                 capacity=capacity,
                 window_seconds=window_seconds
             )
@@ -248,21 +252,35 @@ def get_client_ip(request: Request) -> str | None:
 
     if not Settings.BEHIND_PROXY:
         return connecting_ip
+
+
+    if Settings.CLIENT_IP_HEADER:
+
+        header_name = Settings.CLIENT_IP_HEADER
+        ip = request.headers.get(header_name)
+        if ip:
+            try:
+                ip_address(ip.strip())
+                return ip.strip()
+            except ValueError:
+                pass
+
     
-    # If direct peer is not trusted → treat as client
-    if not _is_trusted_proxy(connecting_ip):
-        return connecting_ip
+    if Settings.TRUSTED_PROXY_LIST:
+
+        if not _is_trusted_proxy(connecting_ip):
+            return connecting_ip
     
-    # Parse X-Forwarded-For: leftmost = original client, rightmost = last proxy
-    # Format: "client, proxy1, proxy2"
-    xff = request.headers.get("X-Forwarded-For")
-    if xff:
-        # Walk from rightmost to leftmost, skipping trusted proxies,
-        # and return the first IP that is NOT in our trusted list.
-        ips = [ip.strip() for ip in xff.split(",")]
-        for ip in reversed(ips):
-            if not _is_trusted_proxy(ip):
-                return ip
+        # Parse X-Forwarded-For: leftmost = original client, rightmost = last proxy
+        # Format: "client, proxy1, proxy2"
+        xff = request.headers.get("X-Forwarded-For")
+        if xff:
+            # Walk from rightmost to leftmost, skipping trusted proxies,
+            # and return the first IP that is NOT in our trusted list.
+            ips = [ip.strip() for ip in xff.split(",")]
+            for ip in reversed(ips):
+                if not _is_trusted_proxy(ip):
+                    return ip
 
     
     # Fallback to X-Real-IP
@@ -286,9 +304,6 @@ def _is_ip_trusted(client_ip: str) -> bool:
         logger.warning(f"Invalid client IP address: {client_ip}")
         return False
 
-    for pattern in Settings.TRUSTED_IP_REGEX:
-        if pattern.fullmatch(client_ip):
-            return True
     return False
 
 
@@ -299,18 +314,14 @@ def _is_domain_trusted(request: Request) -> bool:
 
     host = host.split(":")[0].lower()
 
-    for pattern in Settings.TRUSTED_DOMAIN_REGEX:
-        if pattern.fullmatch(host):
-            return True
-
-    return False
+    # Exact domain matching (case-insensitive)
+    return host in Settings.TRUSTED_DOMAINS
 
 
 
 def rate_limit(capacity: int, window_seconds: int):
 
     async def dependency(request: Request):
-        
         limiter: RateLimiter = await build_rate_limiter(capacity, window_seconds)
         client_ip = get_client_ip(request)
 
@@ -320,43 +331,48 @@ def rate_limit(capacity: int, window_seconds: int):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Unable to determine client IP for rate limiting.",
             )
-        
-    
-        if Settings.DEPOYMENT_SCENARIO == "private_network":
-            key = f"{request.url.path}:{client_ip}"
 
-        
-        elif Settings.DEPOYMENT_SCENARIO == "public_network":
+        path = request.url.path
+        scenario = Settings.DEPLOYMENT_SCENARIO
 
+
+        if scenario == "private_network":
+            pass
+
+        elif scenario == "public_network":
             ip_trusted = _is_ip_trusted(client_ip)
             domain_trusted = _is_domain_trusted(request)
 
-            if ip_trusted or domain_trusted:
-                key = f"{request.url.path}:{client_ip}"
-
-            else:
+            if not (ip_trusted or domain_trusted):
                 logger.warning(
-                    f"Blocked request from untrusted IP {client_ip} "
-                    f"on path {request.url.path}"
+                    "Blocked request from untrusted IP %s on path %s",
+                    client_ip,
+                    path,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Access denied: request not from trusted network.",
                 )
-        
+
         else:
-            logger.error(f"Invalid deployment scenario: {Settings.DEPOYMENT_SCENARIO}")
+            logger.error("Invalid deployment scenario: %s", scenario)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Invalid deployment configuration.",
             )
 
 
-        key = f"{request.url.path}:{client_ip}"
+        key = f"{path}:{client_ip}"
+
         allowed = await limiter.allow(key)
 
         if not allowed:
-            logger.info(f"Rate limit exceeded capacity: {capacity} for IP {client_ip} on path {request.url.path}")
+            logger.info(
+                "Rate limit exceeded (capacity=%s) for IP %s on path %s",
+                capacity,
+                client_ip,
+                path,
+            )
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Rate limit exceeded. Try again later.",
@@ -365,7 +381,19 @@ def rate_limit(capacity: int, window_seconds: int):
     return dependency
 
 
-async def rate_limiter_cleanup_task(limiter: InMemoryTokenBucket, interval_seconds: int = 60):
+def scenario_standard_rate_limit():
+    """Rate limit dependency configured for the current deployment scenario."""
+    count, window = Settings.get_standard_rate_limit()
+    return rate_limit(count, window)
+
+
+def scenario_registration_rate_limit():
+    """Registration-specific rate limit dependency for the active scenario."""
+    count, window = Settings.get_registration_rate_limit()
+    return rate_limit(count, window)
+
+
+async def rate_limiter_cleanup_task(limiter: InMemoryTokenBucketRateLimiter, interval_seconds: int = 60):
     logger.info(f"Starting rate limiter cleanup task with interval {interval_seconds} seconds.")
     try:
         while True:

@@ -7,8 +7,9 @@ load_dotenv()
 
 BASE_URL =  os.getenv("MCP_SERVER_PUBLIC_URL")
 REGISTER_URL = f"{BASE_URL}/register"
-MAX_REDIRECT_URIS = 5
+MAX_REDIRECT_URIS = 3
 MAX_STRING_LENGTH=256
+MAX_CLIENT_NAME_LENGTH=80
 MAX_SCOPE_LENGTH=256
 
 VALID_PAYLOAD = {
@@ -37,12 +38,12 @@ def test_redirect_uris_over_limit(max_redirect_uris: int = 8):
 
 
 def test_client_name_too_long():
-    """Send a client_name exceeding MAX_STRING_LENGTH."""
+    """Send a client_name exceeding MAX_CLIENT_NAME_LENGTH."""
     print("\n=== client_name Too Long ===")
 
     payload = {
         **VALID_PAYLOAD,
-        "client_name": "x" * (MAX_STRING_LENGTH + 1)
+        "client_name": "x" * (MAX_CLIENT_NAME_LENGTH + 1)
     }
     r = requests.post(REGISTER_URL, json=payload)
     print(f"  Status: {r.status_code}")

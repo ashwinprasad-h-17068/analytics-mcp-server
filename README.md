@@ -190,6 +190,8 @@ or simply add the <mcp-server-url> in the corresponding location the MCP host re
   </tbody>
 </table>
 
+Before configuring and running the Remote MCP server, please check the [`Security Guidelines`](./SECURITY.md) for best practices on securing your hosted instance.
+
 3. Run the Remote MCP container on the host machine:
 
 ```bash

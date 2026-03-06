@@ -15,7 +15,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from src.auth.persistence import InMemoryProvider, ttl_cleanup_task
 from src.auth.remote_auth import registed_clients_store, auth_transactions_store, auth_codes_store, client_ip_vs_client_ids_store
-from src.auth.rate_limiter import build_rate_limiter, _rate_limiter_cache, rate_limiter_cleanup_task, InMemoryTokenBucket
+from src.auth.rate_limiter import build_rate_limiter, _rate_limiter_cache, rate_limiter_cleanup_task, InMemoryTokenBucketRateLimiter
 from src.utils.security import MaxBodySizeMiddleware
 from fastapi.exceptions import RequestValidationError
 from src.utils.exceptions import validation_exception_handler
@@ -51,10 +51,10 @@ async def lifespan(app: FastAPI):
             background_tasks.append(asyncio.create_task(ttl_cleanup_task(store)))
         logger.info("Background TTL schedulers started for InMemoryProviders.")
 
-    app.state.global_rate_limiter = await build_rate_limiter(capacity=30, window_seconds=60)
+    app.state.global_rate_limiter = await build_rate_limiter(capacity=Settings.GLOBAL_OAUTH_RATE_LIMIT_CAPACITY, window_seconds=Settings.GLOBAL_OAUTH_RATE_LIMIT_WINDOW)
     
     for limiter in _rate_limiter_cache.values():
-        if isinstance(limiter, InMemoryTokenBucket):
+        if isinstance(limiter, InMemoryTokenBucketRateLimiter):
             background_tasks.append(asyncio.create_task(rate_limiter_cleanup_task(limiter)))
     
     if background_tasks:

@@ -6,7 +6,6 @@ from fastmcp.server.dependencies import get_http_request
 from starlette.requests import Request
 from urllib.parse import urlparse
 from ipaddress import ip_address, ip_network, IPv4Network, IPv6Network
-import re
 
 load_dotenv()
 
@@ -72,7 +71,7 @@ class Settings:
          for ip in os.getenv("TRUSTED_PROXY_LIST", "").split(",") if ip.strip()]
         if BEHIND_PROXY else []
     )
-    DEPOYMENT_SCENARIO: Literal["private_network", "public_network"]  = os.getenv("DEPOYMENT_SCENARIO", "private_network")
+    DEPLOYMENT_SCENARIO: Literal["private_network", "public_network"]  = os.getenv("DEPLOYMENT_SCENARIO", "private_network")
     _RAW_TRUSTED_IP_PATTERNS = [
         item.strip()
         for item in os.getenv("TRUSTED_PUBLIC_NETWORKS", "").split(",")
@@ -85,23 +84,25 @@ class Settings:
         if item.strip()
     ]
 
-    # Parsed structures
     TRUSTED_IP_NETWORKS: list[IPv4Network | IPv6Network] = []
-    TRUSTED_IP_REGEX: list[re.Pattern] = []
-    TRUSTED_DOMAIN_REGEX: list[re.Pattern] = []
+    TRUSTED_DOMAINS: list[str] = []
+    CLIENT_IP_HEADER: str = None if os.getenv("CLIENT_IP_HEADER") is None else os.getenv("CLIENT_IP_HEADER")
 
-    if DEPOYMENT_SCENARIO == "public_network":
+    if DEPLOYMENT_SCENARIO == "public_network":
 
         for pattern in _RAW_TRUSTED_IP_PATTERNS:
             try:
-                # Try CIDR first
+                # Parse as CIDR notation only
                 TRUSTED_IP_NETWORKS.append(ip_network(pattern, strict=False))
-            except ValueError:
-                # Otherwise treat as regex
-                TRUSTED_IP_REGEX.append(re.compile(pattern))
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid CIDR notation '{pattern}' in TRUSTED_PUBLIC_NETWORKS. "
+                    f"Only CIDR notation (e.g., '192.168.1.0/24', '10.0.0.0/8') is supported. "
+                    f"Error: {e}"
+                )
 
-        for pattern in _RAW_TRUSTED_DOMAIN_PATTERNS:
-            TRUSTED_DOMAIN_REGEX.append(re.compile(pattern))
+        # Store domains as exact match strings (case-insensitive comparison will be done at check time)
+        TRUSTED_DOMAINS = _RAW_TRUSTED_DOMAIN_PATTERNS
 
     ## Persistence Settings for Remote
     STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "memory").lower()
@@ -137,11 +138,65 @@ class Settings:
     OAUTH_AUTH_CODE_TTL = int(os.getenv("OAUTH_AUTH_CODE_TTL", "120"))
     OAUTH_REGISTERED_CLIENTS_TTL = int(os.getenv("OAUTH_REGISTERED_CLIENTS_TTL", "36000"))
     OAUTH_CLIENT_IP_MAPPING_TTL = int(os.getenv("OAUTH_CLIENT_IP_MAPPING_TTL", "18000"))
-    OAUTH_STANDARD_RATE_LIMIT_COUNT = int(os.getenv("OAUTH_STANDARD_RATE_LIMIT_COUNT", "5"))
-    OAUTH_STANDARD_RATE_LIMIT_WINDOW = int(os.getenv("OAUTH_STANDARD_RATE_LIMIT_WINDOW", "60"))
-    OAUTH_REGISTRATION_RATE_LIMIT_COUNT = int(os.getenv("OAUTH_REGISTRATION_RATE_LIMIT_COUNT", "10"))
-    OAUTH_REGISTRATION_RATE_LIMIT_WINDOW = int(os.getenv("OAUTH_REGISTRATION_RATE_LIMIT_WINDOW", "3600"))
-    OAUTH_MAX_CLIENTS_PER_IP = int(os.getenv("OAUTH_MAX_CLIENTS_PER_IP", "5"))
+
+    GLOBAL_OAUTH_RATE_LIMIT_CAPACITY = int(os.getenv("GLOBAL_OAUTH_RATE_LIMIT_CAPACITY", "30"))
+    GLOBAL_OAUTH_RATE_LIMIT_WINDOW = int(os.getenv("GLOBAL_OAUTH_RATE_LIMIT_WINDOW", "60"))
+
+    PRIVATE_OAUTH_STANDARD_RATE_LIMIT_COUNT = int(os.getenv("PRIVATE_OAUTH_STANDARD_RATE_LIMIT_COUNT", "5"))
+    PRIVATE_OAUTH_STANDARD_RATE_LIMIT_WINDOW = int(os.getenv("PRIVATE_OAUTH_STANDARD_RATE_LIMIT_WINDOW", "60"))
+    PUBLIC_OAUTH_STANDARD_RATE_LIMIT_COUNT = int(os.getenv("PUBLIC_OAUTH_STANDARD_RATE_LIMIT_COUNT", "100"))
+    PUBLIC_OAUTH_STANDARD_RATE_LIMIT_WINDOW = int(os.getenv("PUBLIC_OAUTH_STANDARD_RATE_LIMIT_WINDOW", "60"))
+
+    PRIVATE_OAUTH_REGISTRATION_RATE_LIMIT_COUNT = int(os.getenv("PRIVATE_OAUTH_REGISTRATION_RATE_LIMIT_COUNT", "10"))
+    PRIVATE_OAUTH_REGISTRATION_RATE_LIMIT_WINDOW = int(os.getenv("PRIVATE_OAUTH_REGISTRATION_RATE_LIMIT_WINDOW", "3600"))
+    PUBLIC_OAUTH_REGISTRATION_RATE_LIMIT_COUNT = int(os.getenv("PUBLIC_OAUTH_REGISTRATION_RATE_LIMIT_COUNT", "50"))
+    PUBLIC_OAUTH_REGISTRATION_RATE_LIMIT_WINDOW = int(os.getenv("PUBLIC_OAUTH_REGISTRATION_RATE_LIMIT_WINDOW", "3600"))
+
+    PRIVATE_OAUTH_MAX_CLIENTS_PER_IP = int(os.getenv("PRIVATE_OAUTH_MAX_CLIENTS_PER_IP", "5"))
+    PUBLIC_OAUTH_MAX_CLIENTS_PER_IP = int(os.getenv("PUBLIC_OAUTH_MAX_CLIENTS_PER_IP", "0"))
+
+    @classmethod
+    def _is_public(cls) -> bool:
+        if cls.DEPLOYMENT_SCENARIO not in ("private_network", "public_network"):
+            raise ValueError(
+                f"Invalid DEPLOYMENT_SCENARIO: {cls.DEPLOYMENT_SCENARIO}. "
+                "Must be 'private_network' or 'public_network'."
+            )
+        return cls.DEPLOYMENT_SCENARIO == "public_network"
+
+    @classmethod
+    def get_standard_rate_limit(cls) -> tuple[int, int]:
+        """Return (count, window_seconds) for standard endpoints."""
+        if cls._is_public():
+            return (
+                cls.PUBLIC_OAUTH_STANDARD_RATE_LIMIT_COUNT,
+                cls.PUBLIC_OAUTH_STANDARD_RATE_LIMIT_WINDOW,
+            )
+        return (
+            cls.PRIVATE_OAUTH_STANDARD_RATE_LIMIT_COUNT,
+            cls.PRIVATE_OAUTH_STANDARD_RATE_LIMIT_WINDOW,
+        )
+
+    @classmethod
+    def get_registration_rate_limit(cls) -> tuple[int, int]:
+        """Return (count, window_seconds) for client registration."""
+        if cls._is_public():
+            return (
+                cls.PUBLIC_OAUTH_REGISTRATION_RATE_LIMIT_COUNT,
+                cls.PUBLIC_OAUTH_REGISTRATION_RATE_LIMIT_WINDOW,
+            )
+        return (
+            cls.PRIVATE_OAUTH_REGISTRATION_RATE_LIMIT_COUNT,
+            cls.PRIVATE_OAUTH_REGISTRATION_RATE_LIMIT_WINDOW,
+        )
+
+    @classmethod
+    def get_max_clients_per_ip(cls) -> int | None:
+        """Return the max clients per IP, or None if the limit is disabled."""
+        if cls._is_public():
+            limit = cls.PUBLIC_OAUTH_MAX_CLIENTS_PER_IP
+            return None if limit == 0 else limit
+        return cls.PRIVATE_OAUTH_MAX_CLIENTS_PER_IP
 
 
     @staticmethod
@@ -150,6 +205,12 @@ class Settings:
         if not Settings.MCP_SERVER_ORG_IDS:
             return []
         return [org_id.strip() for org_id in Settings.MCP_SERVER_ORG_IDS.split(",") if org_id.strip()]
+
+
+# Scenario-aware derived values kept for backward compatibility with existing imports
+# Settings.OAUTH_STANDARD_RATE_LIMIT_COUNT, Settings.OAUTH_STANDARD_RATE_LIMIT_WINDOW = Settings.get_standard_rate_limit()
+# Settings.OAUTH_REGISTRATION_RATE_LIMIT_COUNT, Settings.OAUTH_REGISTRATION_RATE_LIMIT_WINDOW = Settings.get_registration_rate_limit()
+# Settings.OAUTH_MAX_CLIENTS_PER_IP = Settings.get_max_clients_per_ip()
 
 
 def get_access_token():
