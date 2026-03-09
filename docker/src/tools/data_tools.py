@@ -1,12 +1,12 @@
-from mcp_instance import mcp
-from config import Settings
+from src.mcp_instance import mcp
+from src.config import Settings
 import os
 import json
 import urllib
 import requests
 import pandas as pd
-from utils.common import retry_with_fallback
-from utils.data_utils import import_data_implementation, export_view_implementation, query_data_implementation
+from src.utils.analytics.common import retry_with_fallback
+from src.utils.analytics.data import import_data_implementation, export_view_implementation, query_data_implementation
 import traceback
 from fastmcp.server.dependencies import get_context
 

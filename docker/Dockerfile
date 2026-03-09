@@ -5,12 +5,12 @@ WORKDIR /app
 COPY ./requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY ./src/ .
+COPY ./src/ ./src/
 
 # stdio image
 FROM base AS stdio
-ENTRYPOINT ["python", "stdio.py"]
+ENTRYPOINT ["python", "-m", "src.stdio"]
 
 # http image
 FROM base AS http
-ENTRYPOINT ["python", "http_server.py"]
+ENTRYPOINT ["python", "-m", "src.http_server"]

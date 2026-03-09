@@ -1,4 +1,4 @@
-from config import get_analytics_client_instance
+from src.config import get_analytics_client_instance
 import asyncio
 from dataclasses import dataclass
 from fastmcp.server.dependencies import get_context

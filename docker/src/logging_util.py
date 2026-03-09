@@ -3,7 +3,7 @@ Simple logging utility with console + rotating file handlers.
 
 Usage:
 
-    from logging_util import configure_logging, get_logger
+    from src.logging_util import configure_logging, get_logger
 
     configure_logging(
         level="DEBUG",
@@ -49,6 +49,7 @@ def configure_logging(
     fmt: str = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
     datefmt: str = "%Y-%m-%d %H:%M:%S",
     clear_existing: bool = True,
+    library_levels: Optional[dict] = None,
 ) -> None:
     """
     Configure application-wide logging.
@@ -77,6 +78,11 @@ def configure_logging(
         If True (default), removes existing handlers from the root logger
         before adding new ones. This avoids duplicate logs when `configure_logging`
         is called multiple times.
+    library_levels:
+        Optional dict mapping library logger names to their desired level.
+        Use this to silence noisy third-party libraries while keeping your
+        application logs at the configured level.
+        Example: {"httpx": "WARNING", "mcp": "WARNING", "docket": "WARNING"}
     """
     root = logging.getLogger()
 
@@ -106,6 +112,11 @@ def configure_logging(
         file_handler.setLevel(_to_level(file_level or level))
         file_handler.setFormatter(formatter)
         root.addHandler(file_handler)
+
+    # --- Per-library level overrides ---
+    if library_levels:
+        for lib_name, lib_level in library_levels.items():
+            logging.getLogger(lib_name).setLevel(_to_level(lib_level))
 
 
 def get_logger(name: Optional[str] = None) -> logging.Logger:

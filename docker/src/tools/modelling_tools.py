@@ -1,7 +1,7 @@
-from mcp_instance import mcp
-from config import Settings, get_analytics_client_instance
-from utils.common import retry_with_fallback
-from utils.modelling_utils import (
+from src.mcp_instance import mcp
+from src.config import Settings, get_analytics_client_instance
+from src.utils.analytics.common import retry_with_fallback
+from src.utils.analytics.modelling import (
     create_workspace_implementation, 
     create_table_implementation,
     create_aggregate_formula_implementation,

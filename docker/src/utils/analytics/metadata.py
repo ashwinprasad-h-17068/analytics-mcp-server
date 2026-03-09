@@ -1,7 +1,7 @@
-from config import get_analytics_client_instance
+from src.config import get_analytics_client_instance
 import os
 import asyncio
-from config import Settings
+from src.config import Settings
 
 def filter_and_limit_workspaces(workspaces, contains_str, owned_flag, limit=20):
     """

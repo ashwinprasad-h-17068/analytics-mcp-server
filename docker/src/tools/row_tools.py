@@ -1,7 +1,7 @@
-from mcp_instance import mcp
-from config import Settings, get_analytics_client_instance
-from utils.common import retry_with_fallback
-from utils.row_utils import add_row_implementation, delete_rows_implementation, update_rows_implementation
+from src.mcp_instance import mcp
+from src.config import Settings, get_analytics_client_instance
+from src.utils.analytics.common import retry_with_fallback
+from src.utils.analytics.row import add_row_implementation, delete_rows_implementation, update_rows_implementation
 import traceback
 from fastmcp.server.dependencies import get_context
 
