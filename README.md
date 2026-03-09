@@ -198,7 +198,7 @@ Before configuring and running the Remote MCP server, please check the [`Securit
 docker run --name remote-mcp-server \
     --network=host \
     --env-file .env \
-    zohoanalytics/mcp-server:remote-v1
+    zohoanalytics/mcp-server:remote-v1.1
 ```
 
 Once the container is running, share `MCP_SERVER_PUBLIC_URL` with your users; their MCP clients will connect over HTTP without any local setup.
