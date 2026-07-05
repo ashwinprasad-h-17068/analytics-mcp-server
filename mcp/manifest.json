@@ -16,11 +16,11 @@
   "support": "https://www.zoho.com/analytics/help/contact-us.html",
   "server": {
     "type": "node",
-    "entry_point": "dist/src/index.js",
+    "entry_point": "dist/index.js",
     "mcp_config": {
       "command": "node",
       "args": [
-        "${__dirname}/dist/src/index.js"
+        "${__dirname}/dist/index.js"
       ],
       "env": {
         "ANALYTICS_CLIENT_ID": "${user_config.ANALYTICS_CLIENT_ID}",

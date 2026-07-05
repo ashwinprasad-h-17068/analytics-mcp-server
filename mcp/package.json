@@ -3,7 +3,7 @@
   "version": "1.0.1",
   "description": "Mcp server implementation for Zoho Analytics",
   "bin": {
-    "zoho-analytics-mcp-server": "./dist/src/index.js"
+    "zoho-analytics-mcp-server": "./dist/index.js"
   },
   "scripts": {
     "build": "npm run build --workspace=packages/sql_limit_enforcer && tsc",
@@ -25,12 +25,8 @@
     "axios": "1.17.0",
     "csv-parser": "3.2.0",
     "dedent": "1.6.0",
-    "dotenv": "17.0.1",
-    "sql-limit-enforcer": "*"
+    "dotenv": "17.0.1"
   },
-  "workspaces": [
-    "packages/sql_limit_enforcer"
-  ],
   "files": [
     "dist"
   ]

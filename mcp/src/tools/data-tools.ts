@@ -11,7 +11,7 @@ import {
   QUERY_DATA_QUERY_EXECUTION_TIMEOUT,
   QUERY_DATA_ROW_LIMIT,
 } from "../utils/data-util";
-import { enforceLimit } from "sql-limit-enforcer";
+import { enforceLimit } from "../utils/sqlLimitEnforcer";
 
 // ---- Tool Registrations ----
 
