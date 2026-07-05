@@ -126,7 +126,7 @@ defineTool({
 
     -- Filters (optional, all report types) ----------------------------------------
     Each filter:
-    - tableName (optional str)
+    - tableName (str)
     - columnName (str)
     - operation (str)
     - filterType (str): individualValues, range, ranking, rankingPct, dateRange, year, quarterYear, monthYear, weekYear, quarter, month, week, weekDay, day, hour, dateTime
@@ -377,6 +377,82 @@ defineTool({
         }
       }
       return logAndReturnError(error, "An error occurred while creating the report");
+    }
+  },
+});
+
+defineTool({
+  name: "createQueryTable",
+  description: "Create a query table in the specified workspace with the given name and SQL query",
+  args: {
+    workspaceId: z.string().describe("The ID of the workspace in which to create the query table"),
+    tableName: z.string().describe("The name of the query table to create"),
+    query: z.string().describe("The SQL select query to create the query table"),
+    orgId: z
+      .string()
+      .optional()
+      .describe("The ID of the organization to which the workspace belongs. Defaults to config.ORGID if not provided."),
+  },
+  handler: async ({ workspaceId, tableName, query, orgId }) => {
+    try {
+      if (!orgId) {
+        orgId = config.ORGID || "";
+      }
+      return await retryWithFallback(
+        [orgId],
+        workspaceId,
+        "WORKSPACE",
+        async (org_id, workspace, table, sql) => {
+          const analyticsClient = getAnalyticsClient();
+          const workspaceInst = analyticsClient.getWorkspaceInstance(org_id, workspace);
+          const configParam = {};
+          const tableId = await workspaceInst.createQueryTable(sql, table, configParam);
+          return ToolResponse(`Query table '${table}' created successfully. Table Id: ${tableId}`);
+        },
+        workspaceId,
+        tableName,
+        query
+      );
+    } catch (err) {
+      return logAndReturnError(err, "An error occurred while creating the query table");
+    }
+  },
+});
+
+defineTool({
+  name: "deleteView",
+  description: `
+    Delete a view (table, report, or dashboard) in the specified workspace.
+  `,
+  args: {
+    workspaceId: z.string().describe("The ID of the workspace containing the view to delete"),
+    viewId: z.string().describe("The ID of the view to delete"),
+    orgId: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("The ID of the organization to which the workspace belongs. Defaults to config.ORGID if not provided."),
+  },
+  handler: async ({ workspaceId, viewId, orgId }) => {
+    try {
+      if (!orgId) {
+        orgId = config.ORGID || "";
+      }
+      return await retryWithFallback(
+        [orgId],
+        workspaceId,
+        "WORKSPACE",
+        async (org_id, workspace, view) => {
+          const analyticsClient = getAnalyticsClient();
+          const viewInstance = analyticsClient.getViewInstance(org_id || "", workspace, view);
+          await viewInstance.delete();
+          return ToolResponse(`View with ID ${view} deleted successfully from workspace ${workspace}.`);
+        },
+        workspaceId,
+        viewId
+      );
+    } catch (err) {
+      return logAndReturnError(err, "An error occurred while deleting the view");
     }
   },
 });
