@@ -1,0 +1,40 @@
+{
+  "name": "zoho-analytics-plugin",
+  "owner": {
+    "name": "Zoho Corporation",
+    "email": "support@zoho.com"
+  },
+  "metadata": {
+    "description": "Brief plugin description",
+    "version": "1.2.0"
+  },
+  "plugins": [
+    {
+      "name": "zoho-analytics-plugin",
+      "source": "./",
+      "description": "Brief plugin description",
+      "version": "1.2.0",
+      "author": {
+        "name": "Zoho Corporation"
+      },
+      "homepage": "https://docs.example.com/plugin",
+      "repository": "https://github.com/zoho/analytics-mcp-server/",
+      "license": "MIT",
+      "keywords": [
+        "zoho-analytics",
+        "analytics",
+        "data-visualization",
+        "BI",
+        "zoho"
+      ],
+      "category": "integrations",
+      "tags": [
+        "zoho",
+        "analytics",
+        "data-visualization",
+        "BI",
+        "mcp"
+      ]
+    }
+  ]
+}
