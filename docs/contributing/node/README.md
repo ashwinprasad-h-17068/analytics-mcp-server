@@ -2,6 +2,8 @@
 
 Welcome to the Node.js MCP Server contribution documentation. This guide will help you set up your development environment and start contributing.
 
+← [Documentation Index](./INDEX.md) | [Project Root](../../../README.md)
+
 ## 📚 Documentation Overview
 
 This documentation is organized into focused guides for easy navigation:
@@ -22,6 +24,13 @@ This documentation is organized into focused guides for easy navigation:
 - Obtaining Zoho Analytics credentials
 - Security best practices
 - Regional server URLs
+
+**[Build Configuration](./BUILD_CONFIGURATION.md)** - Product variants and build options
+- Building different product variants (MEAP, ZAOP, etc.)
+- Customizing product names at build time
+- Understanding the build process
+- CI/CD pipeline examples
+- Build troubleshooting
 
 ### Docker Development
 
@@ -192,3 +201,5 @@ If you encounter issues:
 ---
 
 **Ready to contribute?** Start with [Development Setup](./DEVELOPMENT_SETUP.md) 🚀
+
+← [Documentation Index](./INDEX.md)

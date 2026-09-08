@@ -1,9 +1,9 @@
 {
-  "name": "me-analytics-plus-mcp-server",
+  "name": "{{PACKAGE_NAME}}",
   "version": "1.0.3",
-  "description": "MCP server implementation for ME Analytics Plus",
+  "description": "{{PACKAGE_DESCRIPTION}}",
   "bin": {
-    "me-analytics-plus-mcp-server": "./dist/src/index.js"
+    "{{BINARY_NAME}}": "./dist/src/index.js"
   },
   "scripts": {
     "prebuild": "node scripts/generate-package-json.js",

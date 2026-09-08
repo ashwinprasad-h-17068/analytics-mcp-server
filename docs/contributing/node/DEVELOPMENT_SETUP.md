@@ -2,6 +2,8 @@
 
 This guide covers the different ways to set up your development environment for contributing to the Node.js MCP server.
 
+← [Documentation Index](./INDEX.md) | [Main Guide](./README.md)
+
 ## Prerequisites
 
 Choose one of the following setup methods based on your preference:
@@ -36,6 +38,8 @@ If you have Node.js installed on your system:
    ```bash
    npm run build
    ```
+   
+   > **Note:** To build product variants (MEAP, ZAOP, etc.), see [Build Configuration](./BUILD_CONFIGURATION.md)
 
 4. **Configure environment variables** (see [Environment Configuration](./ENVIRONMENT_SETUP.md))
 
@@ -69,22 +73,6 @@ After making changes to TypeScript code:
 npm run build
 ```
 
-### Running Tests
-
-If tests are configured:
-
-```bash
-npm test
-```
-
-### Linting Code
-
-Check code quality:
-
-```bash
-npm run lint
-```
-
 ### Running the Server
 
 With environment variables configured:
@@ -106,5 +94,10 @@ For detailed debugging instructions, see the [Debugging Guide](./DEBUGGING.md).
 ## Next Steps
 
 - [Configure Environment Variables](./ENVIRONMENT_SETUP.md)
+- [Build Product Variants](./BUILD_CONFIGURATION.md)
 - [Learn about Debugging](./DEBUGGING.md)
 - [Containerized Development Details](./CONTAINERIZED_DEVELOPMENT.md)
+
+---
+
+← [Documentation Index](./INDEX.md) | [Main Guide](./README.md)
