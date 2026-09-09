@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+
   node-dev:
     image: node:24  # You can change the version as needed
     container_name: analytics-mcp-node-dev
@@ -13,3 +14,10 @@ services:
     stdin_open: true   # Keeps stdin open for interactive sessions
     tty: true          # Allocates a pseudo-TTY
     command: tail -f /dev/null  # Keeps the container running
+
+  # Optional Verdaccio service for local npm registry
+  # verdaccio:
+  #   image: verdaccio/verdaccio:6
+  #   container_name: analytics-mcp-verdaccio
+  #   network_mode: host
+  #   restart: unless-stopped

@@ -31,6 +31,9 @@
   "workspaces": [
     "packages/sql_limit_enforcer"
   ],
+  "bundleDependencies": [
+    "sql-limit-enforcer"
+  ],
   "files": [
     "dist"
   ]
