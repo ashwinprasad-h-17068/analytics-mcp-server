@@ -2,6 +2,19 @@
 
 This guide covers debugging the Node.js MCP server using VS Code, for both native and containerized development environments.
 
+← [Documentation Index](./INDEX.md) | [Main Guide](./README.md)
+
+## Contents
+
+- [Prerequisites](#prerequisites)
+- [Overview](#overview)
+- [Debugging Methods](#debugging-methods)
+  - [Method 1: Attach to Running Server](#method-1-attach-to-running-server-recommended)
+- [Troubleshooting](#troubleshooting)
+- [Disabling Debug Mode](#disabling-debug-mode)
+- [Security Warning](#security-warning)
+- [Launch Configuration Reference](#launch-configuration-reference)
+
 ## Prerequisites
 
 - VS Code installed
@@ -19,7 +32,7 @@ Both methods work in native and containerized environments.
 
 ## Debugging Methods
 
-### Method 1: Attach to Running Server (Recommended)
+### Attach to Running Server
 
 This method debugs the server in its normal runtime environment, including when running with MCP clients.
 
@@ -70,86 +83,6 @@ Add to your MCP configuration:
 
 **For Containerized Development:** Since `network_mode: host` is used, the debug port (9229) is accessible on your host machine. The attach process is identical to native development.
 
-### Method 2: Direct Launch (Quick Testing)
-
-Launches the server directly from VS Code without an MCP client.
-
-#### Step 1: Enable Debugging in Code
-
-Same as Method 1 - uncomment debugging block in `node/src/index.ts` and rebuild.
-
-#### Step 2: Configure Environment Variables
-
-**Native Development:**
-Create `node/.env` with required variables:
-```env
-ANALYTICS_CLIENT_ID=your_client_id
-ANALYTICS_CLIENT_SECRET=your_client_secret
-ANALYTICS_REFRESH_TOKEN=your_refresh_token
-ANALYTICS_ORG_ID=your_org_id
-ACCOUNTS_SERVER_URL=https://accounts.zoho.com
-ANALYTICS_SERVER_URL=https://analyticsapi.zoho.com
-DEBUG=true
-DEBUG_PORT=9229
-```
-
-**Containerized Development:**
-Environment variables are already configured in `docs/contributing/node/.env`. Launch the server inside the container using VS Code Remote - Containers for debugging.
-
-#### Step 3: Launch from VS Code
-
-1. Debug panel (Ctrl+Shift+D / Cmd+Shift+D)
-2. Select **"Debug MCP Server (Direct Launch)"**
-3. Click green play button (F5)
-4. Set breakpoints and debug
-
-**Note:** For containerized environments, use VS Code Remote - Containers extension to attach to the container first, then use this launch configuration from within the container context.
-
-## VS Code Debugging Features
-
-### Breakpoints
-- Click in gutter (left of line numbers) to set breakpoints
-- Red dots indicate active breakpoints
-- Execution pauses when breakpoint is hit
-
-### Debug Console
-- Evaluate expressions while paused
-- Access variables in current scope
-- Type expressions in Debug Console at bottom
-
-### Call Stack
-- View call stack in Debug panel
-- Click stack frames to navigate execution path
-
-### Variables Panel
-- Inspect local and global variables
-- Expand objects to view properties
-- Watch specific variables or expressions
-
-### Step Controls
-| Control | Shortcut | Action |
-|---------|----------|--------|
-| Continue | F5 | Resume until next breakpoint |
-| Step Over | F10 | Execute current line, move to next |
-| Step Into | F11 | Step into function calls |
-| Step Out | Shift+F11 | Step out of current function |
-| Restart | - | Restart debugging session |
-| Stop | - | Stop debugging |
-
-## Using VS Code Remote - Containers
-
-For containerized development, you can use VS Code's Remote - Containers extension for an integrated experience:
-
-1. **Install Remote - Containers extension**
-2. **Attach to container**:
-   - Press `F1` → "Remote-Containers: Attach to Running Container"
-   - Select `analytics-mcp-node-dev`
-3. **Open `/app` folder** inside container
-4. **Debug normally** using launch configurations
-5. **Set breakpoints** in your TypeScript source files
-6. **Full VS Code features** available within container context
-
-This approach provides the best experience for containerized development, with full IntelliSense, debugging, and terminal access within the container.
 
 ## Troubleshooting
 
@@ -273,3 +206,7 @@ The project includes VS Code launch configurations in `.vscode/launch.json`:
 - [Node.js Debugging Guide](https://nodejs.org/en/docs/guides/debugging-getting-started/)
 - [Node.js Inspector API](https://nodejs.org/api/inspector.html)
 - [VS Code Remote Development](https://code.visualstudio.com/docs/remote/remote-overview)
+
+---
+
+← [Documentation Index](./INDEX.md) | [Main Guide](./README.md)

@@ -5,6 +5,7 @@ import { registerMetaDataTools } from "./tools/metadata-tools";
 import { registerModellingTools } from "./tools/modelling-tools";
 import { registerDataTools } from "./tools/data-tools";
 import { registerRowTools } from "./tools/row-tools";
+import { PRODUCT_NAME, PRODUCT_NAME_KEBAB } from "./config/product";
 
 // ============================================================================
 // DEBUGGING SUPPORT
@@ -49,7 +50,7 @@ for (const envVar of requiredEnvVars) {
 
 
 const server = new McpServer({
-  name: "zoho-analytics",
+  name: PRODUCT_NAME_KEBAB,
   version: "1.0.3"
 });
 
@@ -62,8 +63,8 @@ registerRowTools(server);
 const transport = new StdioServerTransport();
 (async () => {
   await server.connect(transport);
-  console.error("Zoho Analytics MCP server is running and connected to stdin/stdout::v1.0.3");
+  console.error(`${PRODUCT_NAME} MCP server is running and connected to stdin/stdout::v1.0.3`);
 })().catch((error) => {
-  console.error("Failed to start Zoho Analytics MCP server:", error);
+  console.error(`Failed to start ${PRODUCT_NAME} MCP server:`, error);
   process.exit(1);
 });

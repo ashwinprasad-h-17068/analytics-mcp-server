@@ -3,6 +3,7 @@ import type { ServerInstance } from "../common";
 import {getAnalyticsClient, config } from '../utils/apiUtil';
 import { retryWithFallback, ToolResponse, logAndReturnError } from "../utils/common";
 import dedent from "dedent";
+import { PRODUCT_NAME } from "../config/product";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Chart Compatibility Validation Framework
@@ -415,11 +416,11 @@ export function registerModellingTools(server: ServerInstance) {
     {
         description: dedent`
         1. Use Case:
-        - Create an aggregate formula in the specified table of a workspace in Zoho Analytics.
+        - Create an aggregate formula in the specified table of a workspace in ${PRODUCT_NAME}.
         - Use this when the user wants to define a reusable aggregate formula expression on a table.
 
         2. Important Notes:
-        - Aggregate Formulas in Zoho Analytics are select query expressions that return a single aggregate value as output.
+        - Aggregate Formulas are select query expressions that return a single aggregate value as output.
         - The expression should always return a valid aggregate value.
         - Any column or table names used in the expression should be enclosed in double quotes. Literal values should be enclosed in single quotes.
         - While the expression can contain complex nested functions, it should always return a single aggregate value.
@@ -476,7 +477,7 @@ export function registerModellingTools(server: ServerInstance) {
 
     server.registerTool("createWorkspace",
     {
-        description: "Create a new workspace in Zoho Analytics with the given name",
+        description: `Create a new workspace in ${PRODUCT_NAME} with the given name`,
         inputSchema: {
         workspaceName: z.string().describe("Name of the workspace to create")
         },
@@ -555,7 +556,7 @@ export function registerModellingTools(server: ServerInstance) {
     {
     description: dedent`
     1. Use Cases:
-    - Create a chart report in the specified workspace for a table in Zoho Analytics.
+    - Create a chart report in the specified workspace for a table in ${PRODUCT_NAME}.
     - Use this to generate visual representations of data using various chart types.
 
     2. Important Notes:
@@ -754,7 +755,7 @@ export function registerModellingTools(server: ServerInstance) {
     {
         description: dedent`
         1. use_case:
-        - Create a summary report in the specified workspace and table in Zoho Analytics.
+        - Create a summary report in the specified workspace and table in ${PRODUCT_NAME}.
         - Use this to generate grouped aggregate reports, ideal for quick summaries with group-by and aggregate logic.
         - Creates a summary table that groups data by specified columns and applies aggregate functions.
         
@@ -886,7 +887,7 @@ export function registerModellingTools(server: ServerInstance) {
     {
         description: dedent`
     1. use_cases:
-    - Create a pivot table report in the specified workspace and table in Zoho Analytics.
+    - Create a pivot table report in the specified workspace and table in ${PRODUCT_NAME}.
     - Use this when you need multidimensional data summaries by defining rows, columns, and data fields.
 
     2. Important Notes:
@@ -1063,7 +1064,7 @@ export function registerModellingTools(server: ServerInstance) {
     server.registerTool("createLookup",
     {
         description: dedent`
-        Creates a lookup relationship between two columns across two tables. a Lookup is a relationship between two tables that connects a column in one table to a matching column in another table. A lookup tells Zoho Analytics that these two columns are related, allowing you to combine data from both tables in reports/dashboards/multi-table aggregate formulas.
+        Creates a lookup relationship between two columns across two tables. a Lookup is a relationship between two tables that connects a column in one table to a matching column in another table. A lookup tells the system that these two columns are related, allowing you to combine data from both tables in reports/dashboards/multi-table aggregate formulas.
 
         The direction of the relationship flows from source → target.
         For ONE_TO_MANY: source is the "one" (parent) side, target is the "many" (child) side.
