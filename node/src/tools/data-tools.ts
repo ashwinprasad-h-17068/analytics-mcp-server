@@ -7,6 +7,7 @@ import path from "path";
 import fs from "fs";
 import { pollJobCompletion, QUERY_DATA_POLLING_INTERVAL, QUERY_DATA_QUEUE_TIMEOUT, QUERY_DATA_QUERY_EXECUTION_TIMEOUT, QUERY_DATA_ROW_LIMIT } from "../utils/data-util";
 import { enforceLimit } from "sql-limit-enforcer";
+import { PRODUCT_NAME } from "../config/product";
 
 
 export function registerDataTools(server: ServerInstance) {
@@ -15,11 +16,11 @@ export function registerDataTools(server: ServerInstance) {
     {
         description: dedent`
         Executes a SQL query on the specified workspace and returns the top N rows as results.
-        Use this to retrieve data from Zoho Analytics using custom SQL queries, gather insights,
+        Use this to retrieve data from ${PRODUCT_NAME} using custom SQL queries, gather insights,
         and answer natural language queries by analyzing the results.
 
         Use Cases:
-        - Retrieve data from a Zoho Analytics workspace using custom SQL queries.
+        - Retrieve data from a ${PRODUCT_NAME} workspace using custom SQL queries.
         - Gather insights from the data and answer user queries.
         - Answer natural language queries by analyzing SQL query results.
 
@@ -164,7 +165,7 @@ export function registerDataTools(server: ServerInstance) {
         `,
         inputSchema: {
             workspaceId: z.string().describe("The ID of the workspace from which to export objects"),
-            viewId: z.string().describe("The ID of the Zoho Analytics view to be exported. This can be a table, chart, or dashboard"),
+            viewId: z.string().describe(`The ID of the ${PRODUCT_NAME} view to be exported. This can be a table, chart, or dashboard`),
             responseFileFormat: z.enum(["csv", "html", "pdf", "json", "xml", "xls", "image"]).describe('The format in which to export the objects. Supported formats are ["csv","json","xml","xls","pdf","html","image"].'),
             responseFileName: z.string().describe("The name of the exported file without extension (e.g. \"sales_report\"). The file will be saved under the configured exports directory with the extension derived from responseFileFormat. Do not include path separators or directory components."),
             orgId: z.string().optional().describe("The ID of the organization to which the workspace belongs to. If not provided, it defaults to the organization ID from the configuration.")
@@ -402,7 +403,7 @@ export function registerDataTools(server: ServerInstance) {
                     }
 
                     // Prefer synchronous import for smaller files, but fall back to bulk import for larger files.
-                    // Zoho Analytics synchronous import API has a ~20MB limit; when exceeded it can throw errorCode=8513.
+                    // Synchronous import API has a ~20MB limit; when exceeded it can throw errorCode=8513.
                     try {
                         const result = await bulk.importData(table, "append", type, "true", filePath, { delimiter: '0' });
                         return ToolResponse(JSON.stringify(result));

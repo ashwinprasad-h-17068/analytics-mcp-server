@@ -2,6 +2,21 @@
 
 This guide covers using Docker for Node.js MCP server development. This approach allows you to develop without installing Node.js or npm directly on your host system.
 
+← [Documentation Index](./INDEX.md) | [Main Guide](./README.md)
+
+## Contents
+
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Docker Compose Configuration](#docker-compose-configuration)
+- [Development Workflow](#development-workflow)
+- [Debugging](#debugging)
+- [Container Management](#container-management)
+- [Using Different Node.js Versions](#using-different-nodejs-versions)
+- [Troubleshooting](#troubleshooting)
+- [Environment Variables](#environment-variables)
+- [Best Practices](#best-practices)
+
 ## Prerequisites
 
 - Docker
@@ -113,15 +128,6 @@ The containerized environment fully supports VS Code debugging. See the [Debuggi
 3. Due to `network_mode: host`, the debug port (9229) is accessible on your host
 4. Attach VS Code debugger using the "Attach to MCP Server" configuration
 
-### VS Code Remote - Containers
-
-For integrated development:
-
-1. Install the Remote - Containers extension in VS Code
-2. Press `F1` → "Remote-Containers: Attach to Running Container"
-3. Select `analytics-mcp-node-dev`
-4. Open `/app` folder inside the container
-5. Use debugging normally with launch configurations
 
 ## Container Management
 
@@ -187,33 +193,6 @@ Remove if exists:
 docker rm -f analytics-mcp-node-dev
 ```
 
-### File Permission Issues
-
-Container runs as root by default. To run as your user:
-
-Edit `docker-compose.node_dev_env.yaml`:
-```yaml
-services:
-  node-dev:
-    user: "${UID}:${GID}"
-```
-
-Start with:
-```bash
-UID=$(id -u) GID=$(id -g) docker-compose -f docker-compose.node_dev_env.yaml up -d
-```
-
-### Debug Port Already in Use
-
-1. Change `DEBUG_PORT` environment variable
-2. Update VS Code launch configuration to match
-
-### Cannot Access Server from Host
-
-With `network_mode: host`, the server should be accessible. If not:
-1. Verify server is running inside container
-2. Check host firewall settings
-3. Verify correct ports are being used
 
 ## Environment Variables
 
@@ -232,19 +211,6 @@ For detailed environment variable configuration, see [Environment Setup](./ENVIR
    echo $ANALYTICS_CLIENT_ID
    ```
 
-## Best Practices
-
-1. **Keep container running**: Designed to stay running - don't restart unnecessarily
-2. **Global tools**: Install global npm packages inside container:
-   ```bash
-   npm install -g <package-name>
-   ```
-3. **Security**: Use `.env` for credentials, never hardcode
-4. **Cleanup**: Periodically clean Docker resources:
-   ```bash
-   docker system prune -a
-   ```
-
 ## Related Documentation
 
 - [Development Setup](./DEVELOPMENT_SETUP.md) - Overview of setup options
@@ -257,3 +223,7 @@ For detailed environment variable configuration, see [Environment Setup](./ENVIR
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
 - [VS Code Remote - Containers](https://code.visualstudio.com/docs/remote/containers)
 - [Node.js Official Docker Image](https://hub.docker.com/_/node)
+
+---
+
+← [Documentation Index](./INDEX.md) | [Main Guide](./README.md)

@@ -1,7 +1,7 @@
 /*$Id$*/
 
 /**
- * Type definitions for Zoho Analytics Client
+ * Type definitions for Analytics Client
  */
 
 declare module './AnalyticsClient' {

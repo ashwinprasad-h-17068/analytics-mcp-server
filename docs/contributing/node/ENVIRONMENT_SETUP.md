@@ -2,6 +2,20 @@
 
 This guide explains how to configure environment variables for the Node.js MCP server, whether you're using native development or containerized development.
 
+← [Documentation Index](./INDEX.md) | [Main Guide](./README.md)
+
+## Contents
+
+- [Quick Start](#quick-start)
+- [Required Environment Variables](#required-environment-variables)
+- [Optional Environment Variables](#optional-environment-variables)
+- [Setting Environment Variables](#setting-environment-variables)
+- [Obtaining Zoho Analytics Credentials](#obtaining-zoho-analytics-credentials)
+- [Security Best Practices](#security-best-practices)
+- [Updating Environment Variables](#updating-environment-variables)
+- [Troubleshooting](#troubleshooting)
+- [Regional Server URLs](#regional-server-urls)
+
 ## Quick Start
 
 ### For Native Development
@@ -148,17 +162,6 @@ The `.env` file contains sensitive credentials and should **never** be committed
 - Use `.env.example` as a template for sharing with contributors
 - Never hardcode credentials in source code
 
-### Rotate Credentials Regularly
-
-- Periodically regenerate OAuth tokens
-- Update the `.env` file with new credentials
-- Revoke old tokens in the Zoho API Console
-
-### Limit Access Scope
-
-- Use OAuth scopes to limit API access
-- Only grant permissions necessary for the MCP server
-- Review and audit API access regularly
 
 ## Updating Environment Variables
 
@@ -230,3 +233,7 @@ Use the URLs that match your Zoho Analytics account region.
 - [Development Setup](./DEVELOPMENT_SETUP.md) - Choose your development environment
 - [Containerized Development](./CONTAINERIZED_DEVELOPMENT.md) - Docker-based setup details
 - [Debugging Guide](./DEBUGGING.md) - Debug configuration and troubleshooting
+
+---
+
+← [Documentation Index](./INDEX.md) | [Main Guide](./README.md)

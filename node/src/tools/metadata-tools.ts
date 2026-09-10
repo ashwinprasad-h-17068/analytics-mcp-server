@@ -9,6 +9,7 @@ import { promisify } from 'util';
 import * as os from 'os';
 import * as net from 'net';
 import * as tls from 'tls';
+import { PRODUCT_NAME } from "../config/product";
 
 const dnsLookup = promisify(dns.lookup);
 const dnsResolve = promisify(dns.resolve);
@@ -665,7 +666,7 @@ export function registerMetaDataTools(server: ServerInstance) {
      - workspaceId: The ID of the workspace to search in.
      - naturalLanguageQuery: Natural language query for intelligent search. Ignored if viewContainsStr is provided.
      - viewContainsStr: String to filter views by name matching. Takes precedence over naturalLanguageQuery.
-     - allowedViewTypesIds: Optional array of view type IDs to filter results. It should be an array of integers. Different types of views available in zoho analytics are:
+     - allowedViewTypesIds: Optional array of view type IDs to filter results. It should be an array of integers. Different types of views available are:
       (view type_id, view_type_name)
       0 - Table: A standard table
       2 - Chart: A graphical representation of data
@@ -847,7 +848,7 @@ Strictly provide your output in the following JSON format:
     'checkConnection',
     {
       description: `
-        This tool performs a comprehensive, step-by-step health check of the Zoho Analytics MCP Server. Use this tool to diagnose issues such as configuration, network connectivity, misconfigured environment variables, DNS failures or OAuth problems before making real API calls.
+        This tool performs a comprehensive, step-by-step health check of the ${PRODUCT_NAME} MCP Server. Use this tool to diagnose issues such as configuration, network connectivity, misconfigured environment variables, DNS failures or OAuth problems before making real API calls.
       
         It returns a verbose, structured report with a PASS / FAIL / WARN status per step,
         timing information, and actionable hints for any failures.
