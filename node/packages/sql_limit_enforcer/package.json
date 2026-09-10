@@ -4,6 +4,7 @@
   "description": "Enforce an upper LIMIT on MySQL-compatible SELECT queries",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "private": true,
   "exports": {
     ".": {
       "import": "./dist/index.js",
