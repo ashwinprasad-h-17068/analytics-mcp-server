@@ -15,8 +15,30 @@ class AnalyticsClient
         this.clientSecret = clientSecret;
         this.refreshToken = refreshToken;
         this.accessToken = null;
-        this.analyticsURI = analyticsURI;
-        this.accountsURI = accountsURI;
+
+        // Split "host:port/basepath" into hostname, port, and basePath
+        const parseURI = (uri) => {
+            const slashIdx = uri.indexOf('/');
+            const hostPart = slashIdx !== -1 ? uri.substring(0, slashIdx) : uri;
+            const basePath = slashIdx !== -1 ? uri.substring(slashIdx).replace(/\/+$/, '') : '';
+            const colonIdx = hostPart.lastIndexOf(':');
+            const isPort = colonIdx !== -1 && /^\d+$/.test(hostPart.substring(colonIdx + 1));
+            const hostname = isPort ? hostPart.substring(0, colonIdx) : hostPart;
+            const port = isPort ? parseInt(hostPart.substring(colonIdx + 1), 10) : null;
+            return { hostname, port, hostWithPort: hostPart, basePath };
+        };
+
+        const parsedAnalytics = parseURI(analyticsURI);
+        this.analyticsURI = parsedAnalytics.hostWithPort;
+        this.analyticsHostname = parsedAnalytics.hostname;
+        this.analyticsPort = parsedAnalytics.port;
+        this.analyticsBasePath = parsedAnalytics.basePath;
+
+        const parsedAccounts = parseURI(accountsURI);
+        this.accountsURI = parsedAccounts.hostWithPort;
+        this.accountsHostname = parsedAccounts.hostname;
+        this.accountsPort = parsedAccounts.port;
+        this.accountsBasePath = parsedAccounts.basePath;
     }
 
     /**
@@ -329,7 +351,7 @@ class AnalyticsClient
             );
     
             const encodedConfig = encodeURIComponent(JSON.stringify(config));
-            const url = 'https://' + this.analyticsURI + uriPath + '?CONFIG=' + encodedConfig;
+            const url = 'https://' + this.analyticsURI + this.analyticsBasePath + uriPath + '?CONFIG=' + encodedConfig;
     
             if (!this.accessToken) {
                 this.accessToken = await this.getOauth();
@@ -418,7 +440,7 @@ sendImportRequest(uriPath, config, header = {}, filePath, data) {
         uriPath = uriPath + "?" + configParam;
     }
 
-    const url = new URL('https://' + this.analyticsURI + uriPath);
+    const url = new URL('https://' + this.analyticsURI + this.analyticsBasePath + uriPath);
 
     return new Promise((resolve, reject) => {
         const form = new FormData();
@@ -505,7 +527,7 @@ sendExportRequest(
     }
 
     return new Promise((resolve, reject) => {
-        const url = new URL('https://' + this.analyticsURI + uriPath);
+        const url = new URL('https://' + this.analyticsURI + this.analyticsBasePath + uriPath);
 
         const options = {
             method: 'GET',
@@ -587,10 +609,12 @@ sendV2Request(uriPath, reqMethod, config, header = {}, isExportReq = false) {
     }
 
     const options = {
-        host: this.analyticsURI,
-        path: uriPath,
+        hostname: this.analyticsHostname,
+        ...(this.analyticsPort && { port: this.analyticsPort }),
+        path: this.analyticsBasePath + uriPath,
         headers: header,
         method: reqMethod,
+        rejectUnauthorized: true,
     };
 
     return new Promise((resolve, reject) => {
@@ -638,14 +662,16 @@ getOauth() {
     const encodedParams = querystring.stringify(oauthinfo);
 
     const options = {
-        host: this.accountsURI,
-        path: '/oauth/v2/token',
+        hostname: this.accountsHostname,
+        ...(this.accountsPort && { port: this.accountsPort }),
+        path: this.accountsBasePath + '/oauth/v2/token',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'User-Agent': 'MCP Server NPM Client:' + mcpVersionTag,
             'Content-Length': Buffer.byteLength(encodedParams)
         },
-        method: "POST"
+        method: "POST",
+        rejectUnauthorized: true,
     };
 
     return new Promise((resolve, reject) => {
