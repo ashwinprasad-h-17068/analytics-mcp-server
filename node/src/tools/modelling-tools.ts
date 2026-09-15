@@ -4,6 +4,7 @@ import {getAnalyticsClient, config } from '../utils/apiUtil';
 import { retryWithFallback, ToolResponse, logAndReturnError } from "../utils/common";
 import dedent from "dedent";
 import { PRODUCT_NAME } from "../config/product";
+import { getChartTypeSuggestions } from "../utils/charts";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Chart Compatibility Validation Framework
@@ -68,59 +69,59 @@ function classifyOperation(operation: string): CompatClass {
  * Normalizes a user-supplied chartType string to the key used in the
  * compatibility map below.
  */
+const CHART_TYPE_ALIASES: Record<string, string> = {
+    "bar":                        "bar|horizontalBar",
+    "horizontal bar":             "bar|horizontalBar",
+    "stacked bar":                "stackedBar|horizontalStackedBar",
+    "horizontal stacked bar":     "stackedBar|horizontalStackedBar",
+    "line":                       "line|smoothLine|step|area|smoothArea",
+    "smooth line":                "line|smoothLine|step|area|smoothArea",
+    "step":                       "line|smoothLine|step|area|smoothArea",
+    "area":                       "line|smoothLine|step|area|smoothArea",
+    "smooth area":                "line|smoothLine|step|area|smoothArea",
+    "stacked area":               "stackedArea|stackedSmoothArea",
+    "stacked smooth area":        "stackedArea|stackedSmoothArea",
+    "pie":                        "pie|ring|semiPie|semiRing",
+    "ring":                       "pie|ring|semiPie|semiRing",
+    "semi pie":                   "pie|ring|semiPie|semiRing",
+    "semi ring":                  "pie|ring|semiPie|semiRing",
+    "funnel":                     "funnel|pyramid",
+    "pyramid":                    "funnel|pyramid",
+    "butterfly":                  "butterfly",
+    "histogram":                  "histogram",
+    "scatter":                    "scatter",
+    "bubble":                     "bubble|packedBubble",
+    "packed bubble":              "bubble|packedBubble",
+    "bubble pie":                 "bubblePie",
+    "combo":                      "combo|comboBarWithSmoothLine",
+    "combo bar with smooth line": "combo|comboBarWithSmoothLine",
+    "combo bar smooth line":      "combo|comboBarWithSmoothLine",
+    "web":                        "web|webWithFill|webWithoutFill",
+    "web with fill":              "web|webWithFill|webWithoutFill",
+    "web without fill":           "web|webWithFill|webWithoutFill",
+    "heat map":                   "heatMap",
+    "map scatter":                "mapScatter|mapFilled",
+    "map filled":                 "mapScatter|mapFilled",
+    "map bubble":                 "mapBubble",
+    "map pie":                    "mapPie|mapBubblePie",
+    "map bubble pie":             "mapPie|mapBubblePie",
+    "geo heat map":               "geoHeatMap",
+    "tree map":                   "treeMap",
+    "sunburst":                   "sunburst",
+    "sankey":                     "sankey",
+    "word cloud":                 "wordCloud",
+    "race line":                  "raceLine|raceBar",
+    "race bar":                   "raceLine|raceBar",
+    "race bubble":                "raceBubble",
+    "gantt":                      "gantt",
+    "table chart":                "tableChart",
+    "map area":                   "mapScatter|mapFilled",
+    "area with points":           "line|smoothLine|step|area|smoothArea",
+};
+
 function normalizeChartType(chartType: string): string {
-    const lower = chartType.toLowerCase().replace(/\s+/g, "");
-    const aliases: Record<string, string> = {
-        "bar":                    "bar|horizontalBar",
-        "horizontalbar":          "bar|horizontalBar",
-        "stackedbar":             "stackedBar|horizontalStackedBar",
-        "horizontalstackedbar":   "stackedBar|horizontalStackedBar",
-        "line":                   "line|smoothLine|step|area|smoothArea",
-        "smoothline":             "line|smoothLine|step|area|smoothArea",
-        "step":                   "line|smoothLine|step|area|smoothArea",
-        "area":                   "line|smoothLine|step|area|smoothArea",
-        "smootharea":             "line|smoothLine|step|area|smoothArea",
-        "stackedarea":            "stackedArea|stackedSmoothArea",
-        "stackedsmootharea":      "stackedArea|stackedSmoothArea",
-        "pie":                    "pie|ring|semiPie|semiRing",
-        "ring":                   "pie|ring|semiPie|semiRing",
-        "semipie":                "pie|ring|semiPie|semiRing",
-        "semiring":               "pie|ring|semiPie|semiRing",
-        "funnel":                 "funnel|pyramid",
-        "pyramid":                "funnel|pyramid",
-        "butterfly":              "butterfly",
-        "histogram":              "histogram",
-        "scatter":                "scatter",
-        "bubble":                 "bubble|packedBubble",
-        "packedbubble":           "bubble|packedBubble",
-        "bubblepie":              "bubblePie",
-        "combo":                  "combo|comboBarWithSmoothLine",
-        "combobarthsmoothline":   "combo|comboBarWithSmoothLine",
-        "combobarsmoothline":     "combo|comboBarWithSmoothLine",
-        "web":                    "web|webWithFill|webWithoutFill",
-        "webwithfill":            "web|webWithFill|webWithoutFill",
-        "webwithoutfill":         "web|webWithFill|webWithoutFill",
-        "heatmap":                "heatMap",
-        "mapscatter":             "mapScatter|mapFilled",
-        "mapfilled":              "mapScatter|mapFilled",
-        "mapbubble":              "mapBubble",
-        "mappie":                 "mapPie|mapBubblePie",
-        "mapbubblepie":           "mapPie|mapBubblePie",
-        "geoheatmap":             "geoHeatMap",
-        "treemap":                "treeMap",
-        "sunburst":               "sunburst",
-        "sankey":                 "sankey",
-        "wordcloud":              "wordCloud",
-        "raceline":               "raceLine|raceBar",
-        "racebar":                "raceLine|raceBar",
-        "racebubble":             "raceBubble",
-        "gantt":                  "gantt",
-        "tableChart":             "tableChart",
-        "tablechart":             "tableChart",
-        "maparea":                "mapScatter|mapFilled",
-        "areawithpoints":         "line|smoothLine|step|area|smoothArea",
-    };
-    return aliases[lower] ?? lower;
+    const lower = chartType.toLowerCase();
+    return CHART_TYPE_ALIASES[lower] ?? lower;
 }
 
 /** Constraint token from compatibility JSON, e.g. "D", "A", "D|A", "MultiA", "Opt" */
@@ -312,8 +313,15 @@ function validateChartCompatibility(chartType: string, axisColumns: AxisColumnIn
     const cases = CHART_COMPAT[normalizedKey];
 
     if (!cases) {
-        // Unknown chart type - skip validation, let the API respond
-        return { valid: true };
+        const suggestions = getChartTypeSuggestions(chartType, CHART_TYPE_ALIASES, 5);
+        return {
+        valid: false,
+        error: suggestions.length
+            ? `Did you mean any of the following charts:\n${suggestions
+                  .map(s => `- ${s}`)
+                  .join("\n")}`
+            : "Chart type not found.",
+        };
     }
 
     // Group columns by shelf
