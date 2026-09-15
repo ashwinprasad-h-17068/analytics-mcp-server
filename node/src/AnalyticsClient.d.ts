@@ -450,6 +450,23 @@ declare module './AnalyticsClient' {
         createReport(config?: Config): Promise<JSONArray>;
 
         /**
+         * Returns the metadata of the specified report.
+         * @param {string} reportId - Id of the report.
+         * @returns {Promise<Object>} Report metadata.
+         * @throws {Error} If the request failed due to some error.
+         */
+        getReportMetadata(reportId: string): Promise<Object>;
+
+        /**
+         * Update the design and configuration of the specified report.
+         * @param {string} viewId - Id of the view (report) to update.
+         * @param {Config} [config] - Contains the control attributes (report configuration).
+         * @returns {Promise<void>}
+         * @throws {Error} If the request failed due to some error.
+         */
+        updateReport(viewId: string, config?: Config): Promise<void>;
+
+        /**
          * Returns list of all aggregate formulas for the specified workspace.
          * @param {Config} [config] - Contains any additional control attributes.
          * @returns {Promise<JSONArray>} Aggregate formula list.

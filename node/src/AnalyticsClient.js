@@ -1894,6 +1894,19 @@ class WorkspaceAPI
     }
 
     /**
+     * Returns the metadata of the specified report.
+     * @method getReportMetadata
+     * @param {String} reportId - Id of the report.
+     * @returns {Object} Report metadata.
+     * @throws {Error} If the request failed due to some error.
+     */
+    async getReportMetadata(reportId) {
+        var uriPath = this.uriPath + "/reports/" + reportId + "/metadata";
+        var result = await this.ac.handleV2Request(uriPath, "GET", null, this.header);
+        return result;
+    }
+
+    /**
      * Returns list of automl analysis for the specified workspace.
      * @method getAutomlAnalysis
      * @returns {Array} AutoML analysis list.
