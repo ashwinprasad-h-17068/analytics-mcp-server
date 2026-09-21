@@ -30,20 +30,7 @@ const PLACEHOLDER = '__PRODUCT_NAME__';
 
 console.log(`\n🔧 Building with PRODUCT_NAME: "${PRODUCT_NAME}"\n`);
 
-// Step 1: Build sql_limit_enforcer workspace
-console.log('📦 Building sql_limit_enforcer workspace...');
-try {
-  execSync('npm run build --workspace=packages/sql_limit_enforcer', { 
-    stdio: 'inherit',
-    cwd: resolve(__dirname, '..')
-  });
-  console.log('✅ sql_limit_enforcer built successfully\n');
-} catch (error) {
-  console.error('❌ Failed to build sql_limit_enforcer workspace');
-  process.exit(1);
-}
-
-// Step 2: Run TypeScript compiler
+// Step 1: Run TypeScript compiler
 console.log('🔨 Running TypeScript compiler...');
 try {
   execSync('tsc', { 
@@ -56,7 +43,7 @@ try {
   process.exit(1);
 }
 
-// Step 3: Replace placeholders in dist files
+// Step 2: Replace placeholders in dist files
 console.log('🔄 Replacing placeholders in compiled files...');
 
 const distDir = resolve(__dirname, '..', 'dist');
