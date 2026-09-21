@@ -1238,4 +1238,495 @@ export function registerModellingTools(server: ServerInstance) {
         }
     }
   );
+
+    server.registerTool("updatePivot",
+    {
+        description: dedent`
+        1. Use Cases:
+        - Update an existing pivot report in the specified workspace in ${PRODUCT_NAME}.
+        - Use this to modify the row, column, data fields, filters, or title of an existing pivot report.
+
+        2. Important Notes:
+        - This tool only supports updating reports whose reportType is "pivot". It does not support chart or summary reports.
+        - The update is a FULL REPLACEMENT: the complete axis, filter, and user-filter configuration is replaced with
+          whatever is sent. If you omit filters, the existing filters are cleared.
+        - ALWAYS call the readReportMetadata tool first to retrieve the current configuration, then modify the desired
+          fields and re-submit the complete configuration via this tool.
+        - baseTableName must NOT be provided for updates (it is inferred from the existing report).
+        - title is optional in update. Omit it to keep the existing title.
+        - reportType must always be supplied and must be "pivot".
+        - All pivot fields (row, column, data) are optional individually, but at least one must be provided.
+        - Allowed operations:
+            - String columns: actual, count, distinctCount
+            - Number columns: measure, dimension, sum, average, min, max, count
+            - Date columns: year, month, week, day
+        - Data fields require aggregate operations like sum, count, etc.
+        - For row and column fields, prefer non-aggregate operations like actual, measure, or dimension.
+        - filters follow the same structure as in createPivotReport.
+
+        3. Arguments:
+        - workspaceId (str): ID of the workspace containing the pivot report.
+        - reportId (str): ID of the pivot report to update.
+        - pivotDetails (dict): Updated pivot configuration. Contains:
+            - row (optional list[dict]): Each dict must have 'columnName', 'tableName', and 'operation'.
+            - column (optional list[dict]): Same structure as row.
+            - data (optional list[dict]): Same structure as row.
+        - title (str | None): Optional. New title for the pivot report. Omit to keep the existing title.
+        - filters (list[dict] | None): Optional. Filter definitions (same structure as createPivotReport).
+            - tableName (str): The name of the table containing the column to filter.
+            - columnName (str): The name of the column to filter.
+            - operation (str): Function applied to the column in the filter.
+            - filterType (str): Type of filter. Accepted: individualValues, range, ranking, rankingPct, dateRange, year, quarterYear, monthYear, weekYear, quarter, month, week, weekDay, day, hour, dateTime
+            - values (list): Values to filter on.
+            - exclude (bool): Whether to exclude the matched values. Default is false.
+        - orgId (str | None): The ID of the organization. Defaults to config.ORGID if not provided.
+
+        4. Returns:
+        - str: Update status or error message.
+        `,
+        inputSchema: {
+            workspaceId: z.string().describe("The ID of the workspace containing the pivot report"),
+            reportId: z.string().describe("The ID of the pivot report to update"),
+            pivotDetails: z.object({
+                row: z.array(z.object({
+                    columnName: z.string(),
+                    tableName: z.string(),
+                    operation: z.string()
+                })).optional(),
+                column: z.array(z.object({
+                    columnName: z.string(),
+                    tableName: z.string(),
+                    operation: z.string()
+                })).optional(),
+                data: z.array(z.object({
+                    columnName: z.string(),
+                    tableName: z.string(),
+                    operation: z.string()
+                })).optional()
+            }),
+            title: z.string().optional().describe("Optional. New title for the pivot report. Omit to keep the existing title."),
+            filters: z.array(z.object({
+                tableName: z.string().optional(),
+                columnName: z.string(),
+                operation: z.string(),
+                filterType: z.string(),
+                values: z.array(z.string()),
+                exclude: z.boolean()
+            })).optional(),
+            orgId: z.string().optional().describe("The ID of the organization. Defaults to config.ORGID if not provided.")
+        },
+        annotations: {
+            title: "Update Pivot Report",
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: false
+        }
+    },
+    async ({ workspaceId, reportId, pivotDetails, title, filters, orgId }) => {
+        try {
+            if (!orgId) {
+                orgId = config.ORGID || "";
+            }
+
+            if (!pivotDetails) {
+                return ToolResponse("Pivot details must be provided.");
+            }
+            if (!pivotDetails.row && !pivotDetails.column && !pivotDetails.data) {
+                return ToolResponse("At least one of 'row', 'column', or 'data' must be provided in pivotDetails.");
+            }
+
+            const axisColumns: any[] = [];
+            const requiredKeys = ["columnName", "tableName", "operation"];
+            for (const [axisType, axisKey] of [["row", "row"], ["column", "column"], ["data", "data"]] as const) {
+                const axisList = (pivotDetails as any)[axisKey];
+                if (axisList) {
+                    if (!Array.isArray(axisList) || axisList.length === 0) {
+                        return ToolResponse(`${axisKey} must be a non-empty list of dictionaries with 'columnName', 'tableName', and 'operation'.`);
+                    }
+                    for (const entry of axisList) {
+                        if (!requiredKeys.every(k => k in entry)) {
+                            return ToolResponse(`Each entry in '${axisKey}' must contain 'columnName', 'tableName', and 'operation'.`);
+                        }
+                        const defaultOperation = (axisType === "row" || axisType === "column") ? "actual" : "count";
+                        axisColumns.push({
+                            type: axisType,
+                            columnName: entry.columnName,
+                            operation: entry.operation || defaultOperation,
+                            tableName: entry.tableName
+                        });
+                    }
+                }
+            }
+
+            const conf: Record<string, any> = {
+                reportType: "pivot",
+                axisColumns
+            };
+
+            // title is optional in update - only include if provided
+            if (title) {
+                conf.title = title;
+            }
+
+            if (filters) {
+                if (!Array.isArray(filters)) {
+                    return ToolResponse("Filters must be a list of dictionaries.");
+                }
+                for (const f of filters) {
+                    if (!["columnName", "operation", "filterType", "values", "exclude"].every(k => k in f)) {
+                        return ToolResponse("Each filter must contain 'columnName', 'operation', 'filterType', 'values', and 'exclude'.");
+                    }
+                }
+                conf.filters = filters;
+            }
+
+            console.error(`[updatePivot] Updating pivot report '${reportId}' in workspace '${workspaceId}'`);
+
+            return await retryWithFallback([orgId], workspaceId, "WORKSPACE", async (org_id, workspace, report_id, bodyConf) => {
+                const ac = getAnalyticsClient();
+                const workspaceInst = ac.getWorkspaceInstance(org_id || "", workspace);
+                await workspaceInst.updateReport(report_id, bodyConf);
+                console.error(`[updatePivot] Successfully updated pivot report '${report_id}'`);
+                return ToolResponse(`Pivot report '${report_id}' updated successfully.`);
+            }, workspaceId, reportId, conf);
+        } catch (err) {
+            return logAndReturnError(err, "An error occurred while updating the pivot report");
+        }
+    });
+
+    server.registerTool("updateSummary",
+    {
+        description: dedent`
+        1. Use Cases:
+        - Update an existing summary report in the specified workspace in ${PRODUCT_NAME}.
+        - Use this to modify the groupBy columns, aggregate columns, filters, or title of an existing summary report.
+
+        2. Important Notes:
+        - This tool only supports updating reports whose reportType is "summary". It does not support chart or pivot reports.
+        - The update is a FULL REPLACEMENT: the complete axis, filter, and user-filter configuration is replaced with
+          whatever is sent. If you omit filters, the existing filters are cleared.
+        - ALWAYS call the readReportMetadata tool first to retrieve the current configuration, then modify the desired
+          fields and re-submit the complete configuration via this tool.
+        - baseTableName must NOT be provided for updates (it is inferred from the existing report).
+        - title is optional in update. Omit it to keep the existing title.
+        - reportType must always be supplied and must be "summary".
+        - Both 'groupBy' and 'aggregate' must be provided.
+        - Do NOT use "actual" operation for numeric columns in aggregate. Use "sum" instead.
+        - filters follow the same structure as in createSummaryReport.
+
+        3. Arguments:
+        - workspaceId (str): ID of the workspace containing the summary report.
+        - reportId (str): ID of the summary report to update.
+        - summaryDetails (dict): Updated summary configuration. Contains:
+            - groupBy (list[dict]): Each dict must have:
+                - columnName (str)
+                - tableName (str)
+                - operation (str): Valid operations based on datatype:
+                    Date: year, quarterYear, monthYear, weekYear, fullDate, dateTime, range, quarter, month, week, weekDay, day, hour, count, distinctCount
+                    String: actual, count, distinctCount
+                    Number: measure, dimension, sum, average, min, max, count, distinctCount
+            - aggregate (list[dict]): Each dict must have:
+                - columnName (str)
+                - operation (str): sum, average, count, min, max, etc.
+                - tableName (str): Required if the column belongs to a related table with a lookup defined.
+        - title (str | None): Optional. New title for the summary report. Omit to keep the existing title.
+        - filters (list[dict] | None): Optional. Filter definitions (same structure as createSummaryReport).
+            - tableName (str): The name of the table containing the column to filter.
+            - columnName (str): The name of the column to filter.
+            - operation (str): Function applied to the column in the filter.
+            - filterType (str): Type of filter. Accepted: individualValues, range, ranking, rankingPct, dateRange, year, quarterYear, monthYear, weekYear, quarter, month, week, weekDay, day, hour, dateTime
+            - values (list): Values to filter on.
+            - exclude (bool): Whether to exclude the matched values. Default is false.
+        - orgId (str | None): The ID of the organization. Defaults to config.ORGID if not provided.
+
+        4. Returns:
+        - str: Update status or error message.
+        `,
+        inputSchema: {
+            workspaceId: z.string().describe("The ID of the workspace containing the summary report"),
+            reportId: z.string().describe("The ID of the summary report to update"),
+            summaryDetails: z.object({
+                groupBy: z.array(z.object({
+                    columnName: z.string(),
+                    tableName: z.string(),
+                    operation: z.string()
+                })).nonempty(),
+                aggregate: z.array(z.object({
+                    columnName: z.string(),
+                    operation: z.string(),
+                    tableName: z.string()
+                })).nonempty()
+            }),
+            title: z.string().optional().describe("Optional. New title for the summary report. Omit to keep the existing title."),
+            filters: z.array(z.object({
+                tableName: z.string().optional(),
+                columnName: z.string(),
+                operation: z.string(),
+                filterType: z.string(),
+                values: z.array(z.string()),
+                exclude: z.boolean()
+            })).optional(),
+            orgId: z.string().optional().describe("The ID of the organization. Defaults to config.ORGID if not provided.")
+        },
+        annotations: {
+            title: "Update Summary Report",
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: false
+        }
+    },
+    async ({ workspaceId, reportId, summaryDetails, title, filters, orgId }) => {
+        try {
+            if (!orgId) {
+                orgId = config.ORGID || "";
+            }
+
+            if (!summaryDetails.groupBy || !summaryDetails.aggregate) {
+                return ToolResponse("Both 'groupBy' and 'aggregate' must be provided in summaryDetails.");
+            }
+
+            const axisColumns: any[] = [];
+            for (const gb of summaryDetails.groupBy) {
+                axisColumns.push({
+                    type: "groupBy",
+                    columnName: gb.columnName,
+                    operation: gb.operation,
+                    tableName: gb.tableName
+                });
+            }
+            for (const ag of summaryDetails.aggregate) {
+                if (ag.operation === "actual") {
+                    return ToolResponse("Invalid operation 'actual' in aggregate. Use 'sum', 'count', etc.");
+                }
+                axisColumns.push({
+                    type: "summarize",
+                    columnName: ag.columnName,
+                    operation: ag.operation,
+                    tableName: ag.tableName
+                });
+            }
+
+            const conf: Record<string, any> = {
+                reportType: "summary",
+                axisColumns
+            };
+
+            // title is optional in update - only include if provided
+            if (title) {
+                conf.title = title;
+            }
+
+            if (filters) {
+                conf.filters = filters;
+            }
+
+            console.error(`[updateSummary] Updating summary report '${reportId}' in workspace '${workspaceId}'`);
+
+            return await retryWithFallback([orgId], workspaceId, "WORKSPACE", async (org_id, workspace, report_id, bodyConf) => {
+                const ac = getAnalyticsClient();
+                const workspaceInst = ac.getWorkspaceInstance(org_id || "", workspace);
+                await workspaceInst.updateReport(report_id, bodyConf);
+                console.error(`[updateSummary] Successfully updated summary report '${report_id}'`);
+                return ToolResponse(`Summary report '${report_id}' updated successfully.`);
+            }, workspaceId, reportId, conf);
+        } catch (err) {
+            return logAndReturnError(err, "An error occurred while updating the summary report");
+        }
+    });
+
+    server.registerTool("updateChart",
+    {
+        description: dedent`
+        1. Use Cases:
+        - Update an existing chart report in the specified workspace in ${PRODUCT_NAME}.
+        - Use this to modify the chart type, axis columns, filters, or title of an existing chart report.
+
+        2. Important Notes:
+        - This tool only supports updating reports whose reportType is "chart". It does not support pivot or summary reports.
+        - The update is a FULL REPLACEMENT: the complete axis, filter, and user-filter configuration is replaced with
+          whatever is sent. If you omit filters, the existing filters are cleared.
+        - ALWAYS call the readReportMetadata tool first to retrieve the current configuration, then modify the desired
+          fields and re-submit the complete configuration via this tool.
+        - baseTableName must NOT be provided for updates (it is inferred from the existing report).
+        - title is optional in update. Omit it to keep the existing title.
+        - reportType must always be supplied and must be "chart".
+        - axisColumns follow the same structure as in createChartReport:
+            - type (str): Axis shelf - one of "xAxis", "yAxis", "colorAxis", "sizeAxis", "textAxis"
+            - columnName (str): Name of the column.
+            - operation (str):
+                String columns: actual, count, distinctCount
+                Number columns: measure, dimension, sum, average, min, max, count, distinctCount
+                Date columns: year, month, week, day, fullDate, dateTime, range, monthYear, quarterYear, weekYear, count, distinctCount
+            - tableName (optional str): If the column belongs to a related table, provide its name.
+        - filters follow the same structure as in createChartReport.
+        - The tool validates chart compatibility (axis columns vs. chart type) before sending the update, just like createChartReport.
+        - Validate the correctness of individual values provided in filters using the queryData tool.
+
+        3. Arguments:
+        - workspaceId (str): ID of the workspace containing the chart report.
+        - reportId (str): ID of the chart report to update.
+        - chartDetails (dict): Updated chart configuration including:
+            - chartType (str): The chart type. Examples: "bar", "horizontal bar", "stacked bar", "line", "area",
+              "pie", "ring", "scatter", "bubble", "packed bubble", "funnel", "pyramid", "butterfly", "combo",
+              "heat map", "tree map", "sunburst", "sankey", "word cloud", "race line", "race bar", "race bubble",
+              "gantt", "histogram", "web", "map scatter", "map filled", "map bubble", "map pie", "geo heat map"
+            - axisColumns (list[dict]): List of axis column definitions (same structure as createChartReport).
+        - title (str | None): Optional. New title for the chart report. Omit to keep the existing title.
+        - filters (list[dict] | None): Optional. Filter definitions (same structure as createChartReport).
+            - tableName (str): The name of the table containing the column to filter.
+            - columnName (str): The name of the column to filter.
+            - operation (str): Function applied to the column in the filter.
+            - filterType (str): Type of filter. Accepted: individualValues, range, ranking, rankingPct, dateRange, year, quarterYear, monthYear, weekYear, quarter, month, week, weekDay, day, hour, dateTime
+            - values (list): Values to filter on.
+            - exclude (bool): Whether to exclude the matched values. Default is false.
+        - orgId (str | None): The ID of the organization. Defaults to config.ORGID if not provided.
+
+        4. Returns:
+        - str: Update status or error message.
+        `,
+        inputSchema: {
+            workspaceId: z.string().describe("The ID of the workspace containing the chart report"),
+            reportId: z.string().describe("The ID of the chart report to update"),
+            chartDetails: z.object({
+                chartType: z.string().describe(
+                    'Chart type, e.g. "bar", "line", "pie", "scatter", "bubble", "stacked bar", "funnel", "heat map", "sankey", and many more etc.'
+                ),
+                axisColumns: z.array(
+                    z.object({
+                        type: z.enum(["xAxis", "yAxis", "colorAxis", "sizeAxis", "textAxis"]).describe(
+                            'Axis shelf: "xAxis", "yAxis", "colorAxis", "sizeAxis", or "textAxis"'
+                        ),
+                        columnName: z.string().describe("Name of the column"),
+                        operation: z.string().describe(
+                            'Operation for the column. String: actual/count/distinctCount. Number: measure/dimension/sum/average/min/max/count/distinctCount. Date: year/month/week/day/fullDate/dateTime/range/monthYear/quarterYear/weekYear/count/distinctCount'
+                        ),
+                        tableName: z.string().optional().describe(
+                            "If the column belongs to a related table, provide its name"
+                        ),
+                    })
+                ).min(1).describe("List of axis column definitions"),
+            }),
+            title: z.string().optional().describe("Optional. New title for the chart report. Omit to keep the existing title."),
+            filters: z
+                .array(
+                    z.object({
+                        tableName: z.string().optional(),
+                        columnName: z.string(),
+                        operation: z.string(),
+                        filterType: z.string(),
+                        values: z.array(z.string()),
+                        exclude: z.boolean(),
+                    })
+                )
+                .optional(),
+            orgId: z.string().optional().describe("The ID of the organization. Defaults to config.ORGID if not provided.")
+        },
+        annotations: {
+            title: "Update Chart Report",
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: false
+        }
+    },
+    async ({ workspaceId, reportId, chartDetails, title, filters, orgId }) => {
+        try {
+            if (!orgId) {
+                orgId = config.ORGID || "";
+            }
+
+            const { chartType, axisColumns } = chartDetails;
+
+            if (!chartType) {
+                return ToolResponse("Chart type is required. Please provide 'chartType' in chartDetails.");
+            }
+            if (!axisColumns || axisColumns.length === 0) {
+                return ToolResponse("At least one axis column must be provided in chartDetails.axisColumns.");
+            }
+
+            // Validate each axis column has required fields
+            for (let i = 0; i < axisColumns.length; i++) {
+                const col = axisColumns[i];
+                if (!col.columnName) {
+                    return ToolResponse(`axisColumns[${i}] is missing 'columnName'.`);
+                }
+                if (!col.operation) {
+                    return ToolResponse(`axisColumns[${i}] ('${col.columnName}') is missing 'operation'.`);
+                }
+                if (!col.type) {
+                    return ToolResponse(`axisColumns[${i}] ('${col.columnName}') is missing 'type'. Must be one of: xAxis, yAxis, colorAxis, sizeAxis, textAxis.`);
+                }
+            }
+
+            // Run compatibility validation
+            const validation = validateChartCompatibility(chartType, axisColumns);
+            if (!validation.valid) {
+                return ToolResponse(validation.error!);
+            }
+
+            // Build payload axisColumns
+            const payloadAxisColumns = axisColumns.map(col => {
+                const entry: Record<string, any> = {
+                    type: col.type == "sizeAxis" ? col.type.toLowerCase() : col.type,
+                    columnName: col.columnName,
+                    operation: col.operation,
+                };
+                if (col.tableName) entry.tableName = col.tableName;
+                return entry;
+            });
+
+            const conf: Record<string, any> = {
+                reportType: "chart",
+                chartType,
+                axisColumns: payloadAxisColumns,
+            };
+
+            // title is optional in update - only include if provided
+            if (title) {
+                conf.title = title;
+            }
+
+            if (filters) {
+                if (!Array.isArray(filters)) {
+                    return ToolResponse("Filters must be provided as an array of objects.");
+                }
+                for (const f of filters) {
+                    if (!("columnName" in f && "operation" in f && "filterType" in f && "values" in f && "exclude" in f)) {
+                        return ToolResponse("Each filter must contain 'columnName', 'operation', 'filterType', 'values', and 'exclude'.");
+                    }
+                }
+                conf.filters = filters;
+            }
+
+            console.error(`[updateChart] Updating chart report '${reportId}' in workspace '${workspaceId}'`);
+
+            return await retryWithFallback([orgId], workspaceId, "WORKSPACE", async (org_id, workspace, report_id, bodyConf) => {
+                const ac = getAnalyticsClient();
+                const workspaceInst = ac.getWorkspaceInstance(org_id || "", workspace);
+                await workspaceInst.updateReport(report_id, bodyConf);
+                console.error(`[updateChart] Successfully updated chart report '${report_id}'`);
+                return ToolResponse(`Chart report '${report_id}' updated successfully.`);
+            }, workspaceId, reportId, conf);
+        } catch (error: any) {
+            if ("errorMessage" in error && "errorCode" in error) {
+                const { errorMessage, errorCode } = error as { errorMessage: string; errorCode: number };
+                if (errorCode === 8166) {
+                    const responseStr = dedent`
+                    ${errorMessage}
+
+                    Supported operations for columns of different types:
+                      String: actual, count, distinctCount
+                      Number: measure, dimension, sum, average, min, max, count, distinctCount
+                      Date: year, month, week, fullDate, dateTime, range, monthYear, quarterYear, weekYear, count, distinctCount
+                    `.trim();
+                    return ToolResponse(responseStr);
+                }
+            }
+            return logAndReturnError(error, "An error occurred while updating the chart report");
+        }
+    }
+    );
 }
+
