@@ -6,7 +6,10 @@
     "{{BINARY_NAME}}": "./dist/src/index.js"
   },
   "scripts": {
-    "prebuild": "node scripts/generate-package-json.js",
+    "prebuild": "PRODUCT_NAME='Zoho Analytics' node scripts/generate-package-json.js",
+    "prebuild:meap": "PRODUCT_NAME='Analytics Plus Cloud' node scripts/generate-package-json.js",
+    "prebuild:zaop": "PRODUCT_NAME='Zoho Analytics On-Premise' node scripts/generate-package-json.js",
+    "prebuild:meapop": "PRODUCT_NAME='Analytics Plus On-Premise' node scripts/generate-package-json.js",
     "build": "PRODUCT_NAME='Zoho Analytics' node scripts/build.mjs",
     "build:meap": "PRODUCT_NAME='Analytics Plus Cloud' node scripts/build.mjs",
     "build:zaop": "PRODUCT_NAME='Zoho Analytics On-Premise' node scripts/build.mjs",
