@@ -317,7 +317,7 @@ function validateChartCompatibility(chartType: string, axisColumns: AxisColumnIn
         return {
         valid: false,
         error: suggestions.length
-            ? `Did you mean any of the following charts:\n${suggestions
+            ? `Given chart type was not found. Did you mean any of the following charts:\n${suggestions
                   .map(s => `- ${s}`)
                   .join("\n")}`
             : "Chart type not found.",
