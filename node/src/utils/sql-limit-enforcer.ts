@@ -1,8 +1,8 @@
 /**
- * sql-limit-enforcer/enforcer
- * ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * sql-limit-enforcer
+ * ~~~~~~~~~~~~~~~~~~
  *
- * Zero-dependency module that tokenizes a MySQL-compatible SELECT query and
+ * Zero-dependency utility that tokenizes a MySQL-compatible SELECT query and
  * enforces an upper bound on the outermost LIMIT clause.
  */
 

@@ -6,7 +6,7 @@ import dedent from "dedent";
 import path from "path";
 import fs from "fs";
 import { pollJobCompletion, QUERY_DATA_POLLING_INTERVAL, QUERY_DATA_QUEUE_TIMEOUT, QUERY_DATA_QUERY_EXECUTION_TIMEOUT, QUERY_DATA_ROW_LIMIT } from "../utils/data-util";
-import { enforceLimit } from "sql-limit-enforcer";
+import { enforceLimit } from "../utils/sql-limit-enforcer";
 import { PRODUCT_NAME } from "../config/product";
 
 
