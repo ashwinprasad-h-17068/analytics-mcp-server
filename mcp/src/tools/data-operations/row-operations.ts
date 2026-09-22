@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { defineTool } from "../tool-registry";
-import { getAnalyticsClient, config } from "../utils/apiUtil";
-import { retryWithFallback, ToolResponse, logAndReturnError } from "../utils/common";
+import { defineTool } from "../../tool-registry";
+import { getAnalyticsClient, config } from "../../utils/apiUtil";
+import { retryWithFallback, ToolResponse, logAndReturnError } from "../../utils/common";
 
 // ---- Tool Registrations ----
 
