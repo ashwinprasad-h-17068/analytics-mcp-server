@@ -6,7 +6,7 @@
     "zoho-analytics-mcp-server": "./dist/index.js"
   },
   "scripts": {
-    "build": "npm run build --workspace=packages/sql_limit_enforcer && tsc",
+    "build": "tsc",
     "lint": "eslint . --ext .ts",
     "test": "jest"
   },

@@ -4,6 +4,8 @@ Workspaces are the top-level containers in Zoho Analytics, similar to databases.
 
 **Terminology note:** In Zoho Analytics, an ordinary Table *is* a type of View (view type 0). The operations below use "view" broadly - it covers tables, query tables, charts, pivots, dashboards, and so on. When an operation targets a specific table, pass its ID as the `viewId`.
 
+> **Looking for folder operations?** Organizing views into folders within a workspace is covered separately — see [Folder Management](./folder_management.md).
+
 
 ## 1. Create a Workspace
 

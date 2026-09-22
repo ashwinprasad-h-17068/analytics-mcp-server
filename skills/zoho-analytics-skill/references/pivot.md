@@ -1,6 +1,8 @@
-# Create Pivot Reports
+# Pivot Reports
 
-Creates a pivot table — a multidimensional data summary with rows, columns, and data fields — on top of a table or query table, via the `createReport` tool with `reportType: "pivot"` and a `pivotConfig` object.
+Creates or updates a pivot table — a multidimensional data summary with rows, columns, and data fields — on top of a table or query table, via `createReport` (with `reportType: "pivot"` and `pivotConfig`) or `updateReport`.
+
+For `updateReport` usage, see [Read & Update Reports](./reports_read_update.md). This file documents the `pivotConfig` shape and valid values applicable to both tools.
 
 ## Create Pivot
 

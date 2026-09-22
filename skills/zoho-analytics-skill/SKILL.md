@@ -19,7 +19,7 @@ This skill provides programmatic access to the Zoho Analytics Operations, enabli
 
 ## Authentication
 
-The tools used in the skill uses OAuth for authentication. You don't have to worry about providing any credentials or secrets, as the skill will handle the authentication process for you. Just execute the tools as mentioned in the examples and the skill will take care of the authentication and token refresh automatically.
+The tools used in the skill uses OAuth for authentication. You don't have to worry about providing any credentials or secrets, as the tools will handle the complete authentication process and token lifecycle for you. Just execute the tools as mentioned in the examples.
 
 ## Operation Categories
 
@@ -43,33 +43,60 @@ Different types of Views/Objects in a workspace are:
 
 Refer to [Workspace Management](./references/workspace_management.md) for all available workspace operations that can be performed.
 
-### Table Schema Management 
+### Folder Management
 
-Tables are the core data structures in Zoho Analytics. They can be created from scratch or imported from various sources.
+Folders organize views (tables, reports, dashboards) within a workspace. Zoho Analytics supports 2 levels of nesting — root-level folders and one level of sub-folders.
 
-Tables are a combination of rows and columns. Each column has a specific data type (e.g., string, number, date).
+If you need to:
+- List existing folders and their IDs
+- Create a new folder or sub-folder inside a workspace
+- Rename a folder
+- Move views (tables, reports, dashboards) into a folder
+- Delete an empty folder
 
-If you need to perform any operations relating to tables, such as 
-- creating a new table
-- modifying the table structure 
-- adding or deleting columns
-- defining lookup relationships (pk-fk relationships) between tables
-- Getting the structure/schema of a table/query table
+Refer to [Folder Management](./references/folder_management.md) for all available folder operations.
 
-or any other DDL operations, refer to [Table Schema Management](./references/table_schema_management.md) for all available table schema management operations that can be performed.
+### Data Modelling
+
+Data Modelling covers all structural operations in Zoho Analytics — how data is stored, shaped, and related across tables.
+
+If you need to perform any operations such as:
+- Creating a new table or adding/removing columns
+- Getting the schema/structure of a table or query table
+- Defining lookup relationships (foreign-key links) between tables
+- Creating SQL-based query tables (materialized views)
+- Creating aggregate formulas (KPI measures) or custom formula columns (row-level derived fields)
+
+Refer to [Data Modelling](./references/data_modelling.md) which will guide you to the appropriate detailed reference.
 
 
 ### Data Management
 
-These operations are concerned with managing the data within the tables such as fetching data to answer any data related queries.
+These operations are concerned with reading from and writing to the actual data rows within tables.
 
-If you need to perform any operations relating to data management, such as
-- fetching data from tables: This is achieved using executing SQL Queries on top of tables and query tables in the workspace. 
+If you need to perform any of the following:
+- **Query data** — run a SQL SELECT to answer questions or retrieve records from tables/query tables
+- **Export data** — export a view (table, report, query table) to a CSV file
+- **Import data** — bulk-import rows into a table from a JSON array or a local CSV/JSON file
+- **Add a row** — insert a single new row into a table
+- **Update rows** — modify existing rows that match a given criteria
+- **Delete rows** — remove rows that match a given criteria
 
-
-For more information on all available data management operations that can be performed, refer to [Data Management](./references/data_management.md).
+Refer to [Data Management](./references/data_management.md) for the appropriate operation.
 
 
 ## Reports Creation and Management
 
 These operations are concerned with creating and managing reports such as charts, pivots and summary views. These reports are created on top of tables and query tables in the workspace. if you need to create any operations like creating reports (charts, pivots, summary), or editing them (like applying a filter, changing the chart type, etc.), or deleting them, refer to [Reports Creation and Management](./references/reports_management.md) for all available report management operations that can be performed.
+
+
+## Dashboard Management
+
+A dashboard assembles multiple reports and content cards (HTML, images, titles, embedded URLs, user filter panels) into a single interactive view.
+
+If you need to:
+- Read the full configuration (layout, settings, themes) of an existing dashboard
+- Create a new dashboard with a layout of report cards and other content
+- Update an existing dashboard — rename it, add/remove/reposition cards, change visual themes, or modify behavior settings
+
+Refer to [Dashboard Management](./references/dashboard_management.md) for all available dashboard operations.

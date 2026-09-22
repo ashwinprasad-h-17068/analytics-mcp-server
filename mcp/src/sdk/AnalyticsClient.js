@@ -210,6 +210,19 @@ class AnalyticsClient
         return bulkInstance;
     }
 
+    /**
+     * Returns a new DashboardAPI instance.
+     * @method getDashboardInstance
+     * @param {String} orgId - The ID of the organization.
+     * @param {String} workspaceId - The ID of the workspace.
+     * @param {String} dashboardId - The ID of the dashboard.
+     */
+    getDashboardInstance(orgId, workspaceId, dashboardId)
+    {
+        var dashboardInstance = new DashboardAPI(this, orgId, workspaceId, dashboardId);
+        return dashboardInstance;
+    }
+
     sleep(ms)
     {
         return new Promise((resolve) => {
@@ -1843,6 +1856,27 @@ class WorkspaceAPI
     }
 
     /**
+     * Create a new dashboard in the specified workspace.
+     * @method createDashboard
+     * @param {String} displayName - Display name of the dashboard (must be unique within the workspace, max 200 chars).
+     * @param {Object} layout - Dashboard layout object keyed by string card IDs. Each card must have type, width, height, left, top. VIEW cards also need viewName and properties. HTML/TITLE/IMAGE/EMBED cards need content.
+     * @param {Object|null} settings - Optional dashboard settings (allowDrillDown, fitToWidth, allowExport, etc.).
+     * @param {Object|null} themes - Optional visual theme (type: "solid"/"gradient"/"image", card, plus type-specific sub-object).
+     * @param {Object} config={} - Contains any additional control attributes.
+     * @returns {String} Created dashboard id.
+     * @throws {Error} If the request failed due to some error.
+     */
+    async createDashboard(displayName, layout, settings = null, themes = null, config = {}) {
+        var uriPath = this.uriPath + "/dashboards";
+        config.displayName = displayName;
+        config.layout = layout;
+        if (settings != null) config.settings = settings;
+        if (themes != null)   config.themes = themes;
+        var result = await this.ac.handleV2Request(uriPath, "POST", config, this.header);
+        return result.dashboardId;
+    }
+
+    /**
      * Update the design and configuration of the specified report.
      * @method updateReport
      * @param {String} viewId - Id of the view.
@@ -3055,6 +3089,68 @@ class BulkAPI
     }
 
 
+}
+
+
+/**
+ * DashboardAPI class to interact with Zoho Analytics Dashboard APIs.
+ * Provides methods to read metadata and update an existing dashboard.
+ */
+class DashboardAPI
+{
+    /**
+     * Constructs a DashboardAPI instance.
+     * @param {AnalyticsClient} ac - The analytics client instance.
+     * @param {String} orgId - The organization ID.
+     * @param {String} workspaceId - The workspace ID.
+     * @param {String} dashboardId - The dashboard ID.
+     */
+    constructor(ac, orgId, workspaceId, dashboardId)
+    {
+        this.ac = ac;
+        this.orgId = orgId;
+        this.workspaceId = workspaceId;
+        this.dashboardId = dashboardId;
+        this.uriPath = "/restapi/v2/workspaces/" + workspaceId + "/dashboards/" + dashboardId;
+        this.header = { "ZANALYTICS-ORGID": orgId };
+    }
+
+    /**
+     * Returns the full CONFIG JSON of the specified dashboard — including its displayName,
+     * layout, settings, and themes. Use this before calling updateDashboard to read the
+     * current state (read-modify-write pattern).
+     * @method getMetadata
+     * @returns {Object} Dashboard metadata containing displayName, layout, settings, and themes.
+     * @throws {Error} If the request failed due to some error.
+     */
+    async getMetadata()
+    {
+        var uriPath = this.uriPath + "/metadata";
+        var result = await this.ac.handleV2Request(uriPath, "GET", null, this.header);
+        return result;
+    }
+
+    /**
+     * Updates an existing dashboard. Each top-level key provided (displayName, layout, settings,
+     * themes) is fully replaced — partial sub-object updates are not supported. Always call
+     * getMetadata() first to retrieve the current state, modify the required fields, then submit
+     * the full modified CONFIG (read-modify-write pattern).
+     * @method updateDashboard
+     * @param {String|null} displayName - New display name for the dashboard, or null to keep existing.
+     * @param {Object|null} layout - Complete new layout object keyed by card IDs, or null to keep existing.
+     * @param {Object|null} settings - Complete new settings object, or null to keep existing.
+     * @param {Object|null} themes - Complete new themes object, or null to keep existing.
+     * @param {Object} config={} - Contains any additional control attributes.
+     * @throws {Error} If the request failed due to some error.
+     */
+    async updateDashboard(displayName = null, layout = null, settings = null, themes = null, config = {})
+    {
+        if (displayName != null) config.displayName = displayName;
+        if (layout != null)      config.layout = layout;
+        if (settings != null)    config.settings = settings;
+        if (themes != null)      config.themes = themes;
+        await this.ac.handleV2Request(this.uriPath, "PUT", config, this.header);
+    }
 }
 
 

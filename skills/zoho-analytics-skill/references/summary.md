@@ -1,6 +1,8 @@
-# Create Summary Reports
+# Summary Reports
 
-Creates a summary view — a grouped aggregate report with group-by and aggregate logic — on top of a table or query table, via the `createReport` tool with `reportType: "summary"` and a `summaryConfig` object.
+Creates or updates a summary view — a grouped aggregate report with group-by and aggregate logic — on top of a table or query table, via `createReport` (with `reportType: "summary"` and `summaryConfig`) or `updateReport`.
+
+For `updateReport` usage, see [Read & Update Reports](./reports_read_update.md). This file documents the `summaryConfig` shape and valid values applicable to both tools.
 
 ## Create Summary
 
@@ -21,7 +23,7 @@ Arguments (passed to `createReport`):
   - String: `actual`, `count`, `distinctCount`
   - Number: `measure`, `dimension`, `sum`, `average`, `min`, `max`, `count`, `distinctCount`
 - Valid `aggregate` operations are `sum`, `count`, `average`, `min`, `max`. Never use `actual` in `aggregate` — every aggregate entry must produce a computed value, not the raw column; the tool rejects `actual` here explicitly.
-- Unlike Create Chart's `xAxis`/`yAxis` (see [Charts](./charts.md)), every `groupBy` and `aggregate` entry requires its own `tableName`, even when it's the same as the report's base `tableName` — supply it explicitly on each entry.
+- Unlike Chart reports (see [Charts](./charts.md)), every `groupBy` and `aggregate` entry requires its own `tableName`, even when it's the same as the report's base `tableName` — supply it explicitly on each entry.
 
 ```
 execute_analytics_tool(

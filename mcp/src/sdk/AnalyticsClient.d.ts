@@ -115,6 +115,15 @@ declare module './AnalyticsClient' {
         getWorkspaceInstance(orgId: string, workspaceId: string): WorkspaceAPI;
 
         /**
+         * Returns a new DashboardAPI instance.
+         * @param {string} orgId - The ID of the organization.
+         * @param {string} workspaceId - The ID of the workspace.
+         * @param {string} dashboardId - The ID of the dashboard.
+         * @returns {DashboardAPI} An instance of DashboardAPI.
+         */
+        getDashboardInstance(orgId: string, workspaceId: string, dashboardId: string): DashboardAPI;
+
+        /**
          * Returns a new ViewAPI instance.
          * @param {string} orgId - The ID of the organization.
          * @param {string} workspaceId - The ID of the workspace.
@@ -456,6 +465,50 @@ declare module './AnalyticsClient' {
         getViews(config?: Config): Promise<JSONArray>;
 
         createReport(config?: Config): Promise<JSONArray>;
+
+        /**
+         * Create a new dashboard in the specified workspace.
+         * @param {string} displayName - Display name of the dashboard (unique within workspace, max 200 chars).
+         * @param {object} layout - Dashboard layout object keyed by string card IDs. Each card must include type, width, height, left, top. VIEW cards also need viewName and properties. HTML/TITLE/IMAGE/EMBED cards need content.
+         * @param {object | null} [settings] - Optional dashboard settings (allowDrillDown, fitToWidth, allowExport, etc.).
+         * @param {object | null} [themes] - Optional visual theme (type: "solid"/"gradient"/"image", card, plus type-specific sub-object).
+         * @param {Config} [config] - Contains any additional control attributes.
+         * @returns {Promise<string>} Created dashboard ID.
+         * @throws {Error} If the request failed due to some error.
+         */
+        createDashboard(displayName: string, layout: object, settings?: object | null, themes?: object | null, config?: Config): Promise<string>;
+    }
+
+    class DashboardAPI {
+        /**
+         * Constructs a DashboardAPI instance.
+         * @param {AnalyticsClient} ac - The analytics client instance.
+         * @param {string} orgId - The organization ID.
+         * @param {string} workspaceId - The workspace ID.
+         * @param {string} dashboardId - The dashboard ID.
+         */
+        constructor(ac: AnalyticsClient, orgId: string, workspaceId: string, dashboardId: string);
+
+        /**
+         * Returns the full CONFIG of the specified dashboard — including displayName, layout, settings, and themes.
+         * Use this before calling updateDashboard to retrieve the current state (read-modify-write pattern).
+         * @returns {Promise<Object>} Dashboard metadata object.
+         * @throws {Error} If the request failed due to some error.
+         */
+        getMetadata(): Promise<Object>;
+
+        /**
+         * Updates an existing dashboard. Each top-level key provided is fully replaced.
+         * Partial sub-object updates are not supported. Always call getMetadata() first.
+         * @param {string | null} [displayName] - New display name, or null to keep existing.
+         * @param {object | null} [layout] - Complete new layout object, or null to keep existing.
+         * @param {object | null} [settings] - Complete new settings object, or null to keep existing.
+         * @param {object | null} [themes] - Complete new themes object, or null to keep existing.
+         * @param {Config} [config] - Contains any additional control attributes.
+         * @returns {Promise<void>}
+         * @throws {Error} If the request failed due to some error.
+         */
+        updateDashboard(displayName?: string | null, layout?: object | null, settings?: object | null, themes?: object | null, config?: Config): Promise<void>;
     }
 
     class ViewAPI {

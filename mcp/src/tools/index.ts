@@ -15,3 +15,6 @@ import "./data-operations";
 
 // Reports and visualizations
 import "./reports";
+
+// Dashboard management
+import "./dashboards";

@@ -7,6 +7,60 @@ import { validateChartCompatibility, type AxisColumnInput } from "./chart-valida
 // ---- Tool Registrations ----
 
 defineTool({
+  name: "readReportMetadata",
+  description: `
+    1. Use Case:
+    - Retrieve the full visual metadata (design configuration) of an existing report in Zoho Analytics.
+    - Supports all report types: chart, pivot, and summary.
+
+    2. Important Notes:
+    - This is a read-only operation; it does not modify the report in any way.
+    - The returned metadata includes the report's title, reportType, chartType (for chart reports),
+      axisColumns, filters, and userFilters — the complete design configuration of the report.
+    - Always call this tool first before updating a report (e.g., via the updateReport tool), because
+      the update endpoint performs a full replacement of the axis, filter, and user-filter configuration.
+      Inspect the current configuration here, modify the desired fields, then re-submit via the update tool.
+
+    3. Arguments:
+    - workspaceId (str): The ID of the workspace containing the report.
+    - reportId (str): The ID of the report whose metadata should be retrieved.
+    - orgId (str | None): The ID of the organization. Defaults to config.ORGID if not provided.
+
+    4. Returns:
+    - A JSON string containing the report metadata, or an error message.
+  `,
+  args: {
+    workspaceId: z.string().describe("The ID of the workspace containing the report"),
+    reportId: z.string().describe("The ID of the report whose metadata to retrieve"),
+    orgId: z
+      .string()
+      .optional()
+      .describe("The ID of the organization. Defaults to config.ORGID if not provided."),
+  },
+  handler: async ({ workspaceId, reportId, orgId }) => {
+    try {
+      if (!orgId) {
+        orgId = config.ORGID || "";
+      }
+      return await retryWithFallback(
+        [orgId],
+        workspaceId,
+        "WORKSPACE",
+        async (org_id, workspace) => {
+          const ac = getAnalyticsClient();
+          const workspaceInst = ac.getWorkspaceInstance(org_id, workspace);
+          const metadata = await (workspaceInst as any).getReportMetadata(reportId);
+          return ToolResponse(JSON.stringify(metadata, null, 2));
+        },
+        workspaceId
+      );
+    } catch (err) {
+      return logAndReturnError(err, "An error occurred while retrieving the report metadata");
+    }
+  },
+});
+
+defineTool({
   name: "createReport",
   description: `
     Create a report in the specified workspace in Zoho Analytics.
@@ -68,6 +122,28 @@ defineTool({
     - filterType (str): individualValues, range, ranking, rankingPct, dateRange, year, quarterYear, monthYear, weekYear, quarter, month, week, weekDay, day, hour, dateTime
     - values (list[str])
     - exclude (bool)
+
+    -- User Filters (optional, all report types) -----------------------------------
+    Interactive filter widgets exposed to viewers of the report. Each user filter:
+    - columnName (str, required): Column to expose as a user filter.
+    - tableName (str, required): Table that owns the column. Unlike static filters, this is mandatory.
+    - operation (str, required): Filter operation.
+        Dimensions: "actual"
+        Measures: "sum", "max", "min", "avg", "std", "count", "dc", "actual"
+        Dates: "actual", "dateRange", "relative", "seasonal"
+    - compType (str, conditional - required except for 'dateRange'): UI widget type.
+        Dimensions/Dates: "singleSelect" or "multiSelect"
+        Measures: "slider" or "multiSelect"
+    - filterType (str, conditional - required for measures and date actual/seasonal):
+        Measures: "individualValues", "range", "ranking", "rankingPct"
+        Date actual: "year", "quarteryear", "monthyear", "weekyear", "fulldate", "datetime", "quarter", "month", "week", "date"
+        Date seasonal: "quarter", "month", "week", "weekday", "day", "hour"
+    - isallval (bool, optional): When true, defaults to showing all values.
+    - values (list[str|number], optional): Available/pre-selected values for the filter widget.
+    - defaultFilterValues (list[str], optional): Values pre-selected when the report loads.
+    - exclude (bool, optional): When true, filter excludes selected values.
+    - behaviour (str, optional): "ListAllValues", "ListRelevantValues", "ListOnlyRelevantValues".
+        NOT applicable for "dateRange" or "relative" operations.
   `,
   args: {
     workspaceId: z.string().describe("ID of the workspace to create the report in"),
@@ -172,6 +248,25 @@ defineTool({
       )
       .optional()
       .describe("Optional filters to restrict the dataset"),
+    userFilters: z
+      .array(
+        z.object({
+          columnName: z.string(),
+          tableName: z.string(),
+          operation: z.string(),
+          compType: z.string().optional(),
+          filterType: z.string().optional(),
+          isallval: z.boolean().optional(),
+          values: z.array(z.union([z.string(), z.number()])).optional(),
+          defaultFilterValues: z.array(z.string()).optional(),
+          exclude: z.boolean().optional(),
+          behaviour: z.string().optional(),
+        })
+      )
+      .optional()
+      .describe(
+        "Optional user filters - interactive filter widgets exposed to viewers. Each user filter must include columnName, tableName, and operation. compType is required for all operations except 'dateRange'. filterType is required for measures and date actual/seasonal operations."
+      ),
   },
   handler: async ({
     workspaceId,
@@ -182,6 +277,7 @@ defineTool({
     summaryConfig,
     pivotConfig,
     filters,
+    userFilters,
   }) => {
     try {
       const orgId = config.ORGID || "";
@@ -320,6 +416,55 @@ defineTool({
         conf.filters = filters;
       }
 
+      // Validate and add user filters if provided
+      if (userFilters && userFilters.length > 0) {
+        for (let i = 0; i < userFilters.length; i++) {
+          const uf = userFilters[i];
+          
+          // Check required fields
+          if (!uf.columnName) {
+            return ToolResponse(`userFilters[${i}] is missing required field 'columnName'.`);
+          }
+          if (!uf.tableName) {
+            return ToolResponse(`userFilters[${i}] ('${uf.columnName}') is missing required field 'tableName'. Unlike static filters, tableName is mandatory for user filters.`);
+          }
+          if (!uf.operation) {
+            return ToolResponse(`userFilters[${i}] ('${uf.columnName}') is missing required field 'operation'.`);
+          }
+
+          // Validate compType requirement (required for all operations except 'dateRange')
+          if (uf.operation !== "dateRange" && !uf.compType) {
+            return ToolResponse(
+              `userFilters[${i}] ('${uf.columnName}'): 'compType' is required for all operations except 'dateRange'. ` +
+              `For dimensions and dates use 'singleSelect' or 'multiSelect'. For measures use 'slider' or 'multiSelect'.`
+            );
+          }
+
+          // Validate behaviour field (not applicable for dateRange or relative operations)
+          if ((uf.operation === "dateRange" || uf.operation === "relative") && uf.behaviour) {
+            return ToolResponse(
+              `userFilters[${i}] ('${uf.columnName}'): 'behaviour' field cannot be used with '${uf.operation}' operation. Remove the 'behaviour' field.`
+            );
+          }
+
+          // Validate filterType requirement for measures and date actual/seasonal operations
+          const measureOperations = ["sum", "max", "min", "avg", "std", "count", "dc"];
+          const dateActualOrSeasonal = uf.operation === "actual" || uf.operation === "seasonal";
+          const isMeasureOperation = measureOperations.includes(uf.operation);
+          
+          if ((isMeasureOperation || dateActualOrSeasonal) && uf.operation !== "dateRange" && uf.operation !== "relative" && !uf.filterType) {
+            return ToolResponse(
+              `userFilters[${i}] ('${uf.columnName}'): 'filterType' is required for operation '${uf.operation}'. ` +
+              `For measures use: 'individualValues', 'range', 'ranking', or 'rankingPct'. ` +
+              `For date actual use: 'year', 'quarteryear', 'monthyear', 'weekyear', 'fulldate', 'datetime', 'quarter', 'month', 'week', 'date'. ` +
+              `For date seasonal use: 'quarter', 'month', 'week', 'weekday', 'day', 'hour'.`
+            );
+          }
+        }
+        
+        conf.userFilters = userFilters;
+      }
+
       const reportTypeLabel = reportType.charAt(0).toUpperCase() + reportType.slice(1);
       return await retryWithFallback(
         [orgId],
@@ -403,6 +548,29 @@ defineTool({
       monthYear, weekYear, quarter, month, week, weekDay, day, hour, dateTime
     - values (list[str])
     - exclude (bool)
+
+    -- User Filters (optional, all report types) -----------------------------------
+    Interactive filter widgets exposed to viewers of the report. Omitting this clears existing user filters.
+    Each user filter:
+    - columnName (str, required): Column to expose as a user filter.
+    - tableName (str, required): Table that owns the column. Unlike static filters, this is mandatory.
+    - operation (str, required): Filter operation.
+        Dimensions: "actual"
+        Measures: "sum", "max", "min", "avg", "std", "count", "dc", "actual"
+        Dates: "actual", "dateRange", "relative", "seasonal"
+    - compType (str, conditional - required except for 'dateRange'): UI widget type.
+        Dimensions/Dates: "singleSelect" or "multiSelect"
+        Measures: "slider" or "multiSelect"
+    - filterType (str, conditional - required for measures and date actual/seasonal):
+        Measures: "individualValues", "range", "ranking", "rankingPct"
+        Date actual: "year", "quarteryear", "monthyear", "weekyear", "fulldate", "datetime", "quarter", "month", "week", "date"
+        Date seasonal: "quarter", "month", "week", "weekday", "day", "hour"
+    - isallval (bool, optional): When true, defaults to showing all values.
+    - values (list[str|number], optional): Available/pre-selected values for the filter widget.
+    - defaultFilterValues (list[str], optional): Values pre-selected when the report loads.
+    - exclude (bool, optional): When true, filter excludes selected values.
+    - behaviour (str, optional): "ListAllValues", "ListRelevantValues", "ListOnlyRelevantValues".
+        NOT applicable for "dateRange" or "relative" operations.
   `,
   args: {
     workspaceId: z.string().describe("The ID of the workspace containing the report"),
@@ -512,6 +680,25 @@ defineTool({
       )
       .optional()
       .describe("Optional filters. Omitting this clears existing filters."),
+    userFilters: z
+      .array(
+        z.object({
+          columnName: z.string(),
+          tableName: z.string(),
+          operation: z.string(),
+          compType: z.string().optional(),
+          filterType: z.string().optional(),
+          isallval: z.boolean().optional(),
+          values: z.array(z.union([z.string(), z.number()])).optional(),
+          defaultFilterValues: z.array(z.string()).optional(),
+          exclude: z.boolean().optional(),
+          behaviour: z.string().optional(),
+        })
+      )
+      .optional()
+      .describe(
+        "Optional user filters - interactive filter widgets exposed to viewers. Omitting this clears existing user filters. Each user filter must include columnName, tableName, and operation. compType is required for all operations except 'dateRange'. filterType is required for measures and date actual/seasonal operations."
+      ),
     orgId: z
       .string()
       .optional()
@@ -526,6 +713,7 @@ defineTool({
     summaryConfig,
     pivotConfig,
     filters,
+    userFilters,
     orgId,
   }) => {
     try {
@@ -678,6 +866,55 @@ defineTool({
       conf.axisColumns = axisColumns;
       if (filters) {
         conf.filters = filters;
+      }
+
+      // Validate and add user filters if provided
+      if (userFilters && userFilters.length > 0) {
+        for (let i = 0; i < userFilters.length; i++) {
+          const uf = userFilters[i];
+          
+          // Check required fields
+          if (!uf.columnName) {
+            return ToolResponse(`userFilters[${i}] is missing required field 'columnName'.`);
+          }
+          if (!uf.tableName) {
+            return ToolResponse(`userFilters[${i}] ('${uf.columnName}') is missing required field 'tableName'. Unlike static filters, tableName is mandatory for user filters.`);
+          }
+          if (!uf.operation) {
+            return ToolResponse(`userFilters[${i}] ('${uf.columnName}') is missing required field 'operation'.`);
+          }
+
+          // Validate compType requirement (required for all operations except 'dateRange')
+          if (uf.operation !== "dateRange" && !uf.compType) {
+            return ToolResponse(
+              `userFilters[${i}] ('${uf.columnName}'): 'compType' is required for all operations except 'dateRange'. ` +
+              `For dimensions and dates use 'singleSelect' or 'multiSelect'. For measures use 'slider' or 'multiSelect'.`
+            );
+          }
+
+          // Validate behaviour field (not applicable for dateRange or relative operations)
+          if ((uf.operation === "dateRange" || uf.operation === "relative") && uf.behaviour) {
+            return ToolResponse(
+              `userFilters[${i}] ('${uf.columnName}'): 'behaviour' field cannot be used with '${uf.operation}' operation. Remove the 'behaviour' field.`
+            );
+          }
+
+          // Validate filterType requirement for measures and date actual/seasonal operations
+          const measureOperations = ["sum", "max", "min", "avg", "std", "count", "dc"];
+          const dateActualOrSeasonal = uf.operation === "actual" || uf.operation === "seasonal";
+          const isMeasureOperation = measureOperations.includes(uf.operation);
+          
+          if ((isMeasureOperation || dateActualOrSeasonal) && uf.operation !== "dateRange" && uf.operation !== "relative" && !uf.filterType) {
+            return ToolResponse(
+              `userFilters[${i}] ('${uf.columnName}'): 'filterType' is required for operation '${uf.operation}'. ` +
+              `For measures use: 'individualValues', 'range', 'ranking', or 'rankingPct'. ` +
+              `For date actual use: 'year', 'quarteryear', 'monthyear', 'weekyear', 'fulldate', 'datetime', 'quarter', 'month', 'week', 'date'. ` +
+              `For date seasonal use: 'quarter', 'month', 'week', 'weekday', 'day', 'hour'.`
+            );
+          }
+        }
+        
+        conf.userFilters = userFilters;
       }
 
       return await retryWithFallback(

@@ -1,6 +1,8 @@
 # Report Filters
 
-Filters restrict the underlying data before a report is computed. Create Chart, Create Summary, and Create Pivot (see [Charts](./charts.md), [Summary](./summary.md), [Pivot](./pivot.md)) all accept an optional `filters` argument on the `createReport` tool call, and all three share this exact same filter structure.
+Filters restrict the underlying data before a report is computed. The `filters` argument is optional on both `createReport` and `updateReport` calls — all report types (chart, summary, pivot) share this exact same filter structure.
+
+> **Important for `updateReport`:** The update is a **full replacement**. If you omit `filters` in an `updateReport` call, all existing filters are cleared. Always re-submit existing filters you wish to keep (read them first via `readReportMetadata` — see [Read & Update Reports](./reports_read_update.md)).
 
 ## Filter object structure
 
@@ -100,7 +102,7 @@ Numeric column, top-N ranking:
 
 ## Using filters in a report
 
-`filters` is passed alongside the report's config object in the `createReport` call:
+`filters` is passed alongside the report's config object in `createReport` or `updateReport`:
 ```
 execute_analytics_tool(
     "createReport",
@@ -114,3 +116,5 @@ execute_analytics_tool(
     }
 )
 ```
+
+For `updateReport`, pass `filters` alongside the report config in the same way. Omitting it clears all existing filters — re-submit any filters you want to preserve.
