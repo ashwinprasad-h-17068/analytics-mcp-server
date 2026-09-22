@@ -87,6 +87,103 @@ async function getViews(
 // ---- Tool Registrations ----
 
 defineTool({
+  name: "listAggregateFormulas",
+  description: `
+    Use Case:
+    1) Fetches the list of aggregate formulas in a workspace or a specific view/table.
+    2) Use this to discover existing aggregate formulas and their expressions before creating new ones or referencing them in reports.
+
+    Important Notes:
+    1) If viewId is provided, fetches aggregate formulas for that specific view/table only.
+    2) If viewId is not provided, fetches aggregate formulas for the entire workspace.
+    3) If formulaNameContainsStr is provided, only formulas whose names contain that string (case-insensitive) are returned.
+
+    Returns:
+    A JSON array of aggregate formula objects. Each object contains:
+    - formulaId: The unique identifier of the aggregate formula.
+    - formulaName: The name of the aggregate formula.
+    - expression: The SQL aggregate expression of the formula.
+    - description: A description of the aggregate formula (if available).
+    - subType: The data sub-type of the formula result (e.g. DECIMAL_NUMBER).
+    - tableName: The name of the table the formula belongs to.
+  `,
+  args: {
+    workspaceId: z.string().describe("The ID of the workspace"),
+    viewId: z
+      .string()
+      .optional()
+      .describe(
+        "Optional. The ID of the view/table. If provided, fetches aggregate formulas for that specific view. If not provided, fetches for the entire workspace."
+      ),
+    formulaNameContainsStr: z
+      .string()
+      .optional()
+      .describe(
+        "Optional. If provided, filters and returns only those formulas whose names contain this string (case-insensitive)."
+      ),
+    orgId: z
+      .string()
+      .optional()
+      .describe("The ID of the organization. Defaults to config.ORGID if not provided."),
+  },
+  handler: async ({ workspaceId, viewId, formulaNameContainsStr, orgId }) => {
+    try {
+      if (!orgId) {
+        orgId = config.ORGID || "";
+      }
+      return await retryWithFallback(
+        [orgId],
+        workspaceId,
+        "WORKSPACE",
+        async (org_id, workspace) => {
+          const ac = getAnalyticsClient();
+          let formulas: any[];
+
+          if (viewId) {
+            const viewInst = ac.getViewInstance(org_id, workspace, viewId);
+            formulas = await (viewInst as any).getAggregateFormulas();
+          } else {
+            const workspaceInst = ac.getWorkspaceInstance(org_id, workspace);
+            formulas = await (workspaceInst as any).getAggregateFormulas();
+          }
+
+          if (!formulas || formulas.length === 0) {
+            return ToolResponse("No aggregate formulas found.");
+          }
+
+          // Apply name filter if provided
+          if (formulaNameContainsStr && formulaNameContainsStr.trim() !== "") {
+            const filterStr = formulaNameContainsStr.toLowerCase();
+            formulas = formulas.filter(
+              (f: any) => f.formulaName && f.formulaName.toLowerCase().includes(filterStr)
+            );
+            if (formulas.length === 0) {
+              return ToolResponse(`No aggregate formulas found matching '${formulaNameContainsStr}'.`);
+            }
+          }
+
+          // Return only the relevant fields
+          const result = formulas.map((f: any) => ({
+            formulaId: f.formulaId,
+            formulaName: f.formulaName,
+            expression: f.expression,
+            description: f.description ?? "",
+            subType: f.subType,
+            tableName: f.tableName,
+          }));
+
+          return ToolResponse(JSON.stringify(result));
+        },
+        workspaceId
+      );
+    } catch (err) {
+      return logAndReturnError(err, "An error occurred while fetching aggregate formulas");
+    }
+  },
+});
+
+
+defineTool({
   name: "getWorkspaceList",
   description: `
     <use_case>
@@ -359,6 +456,163 @@ Strictly provide your output in the following JSON format:
       );
     } catch (error) {
       return logAndReturnError(error, `Error in search_views: ${(error as Error).message || error}`);
+    }
+  },
+});
+
+defineTool({
+  name: "readReportMetadata",
+  description: `
+    1. Use Case:
+    - Retrieve the full visual metadata (design configuration) of an existing report in Zoho Analytics.
+    - Supports all report types: chart, pivot, and summary.
+
+    2. Important Notes:
+    - This is a read-only operation; it does not modify the report in any way.
+    - The returned metadata includes the report's title, reportType, chartType (for chart reports),
+      axisColumns, filters, and userFilters — the complete design configuration of the report.
+    - Always call this tool first before updating a report (e.g., via the updateReport tool), because
+      the update endpoint performs a full replacement of the axis, filter, and user-filter configuration.
+      Inspect the current configuration here, modify the desired fields, then re-submit via the update tool.
+
+    3. Arguments:
+    - workspaceId (str): The ID of the workspace containing the report.
+    - reportId (str): The ID of the report whose metadata should be retrieved.
+    - orgId (str | None): The ID of the organization. Defaults to config.ORGID if not provided.
+
+    4. Returns:
+    - A JSON string containing the report metadata, or an error message.
+  `,
+  args: {
+    workspaceId: z.string().describe("The ID of the workspace containing the report"),
+    reportId: z.string().describe("The ID of the report whose metadata to retrieve"),
+    orgId: z
+      .string()
+      .optional()
+      .describe("The ID of the organization. Defaults to config.ORGID if not provided."),
+  },
+  handler: async ({ workspaceId, reportId, orgId }) => {
+    try {
+      if (!orgId) {
+        orgId = config.ORGID || "";
+      }
+      return await retryWithFallback(
+        [orgId],
+        workspaceId,
+        "WORKSPACE",
+        async (org_id, workspace) => {
+          const ac = getAnalyticsClient();
+          const workspaceInst = ac.getWorkspaceInstance(org_id, workspace);
+          const metadata = await (workspaceInst as any).getReportMetadata(reportId);
+          return ToolResponse(JSON.stringify(metadata, null, 2));
+        },
+        workspaceId
+      );
+    } catch (err) {
+      return logAndReturnError(err, "An error occurred while retrieving the report metadata");
+    }
+  },
+});
+
+defineTool({
+  name: "getQueryTableDetails",
+  description: `
+    Use Case:
+    - Fetches the details of a specific query table in a workspace, including its SQL query and column structure.
+    - Use this when you need to inspect or review an existing query table before making changes.
+
+    Important Notes:
+    - The queryTableId must be the ID of a query table view (viewType: 6), not a regular table or report.
+
+    Returns:
+    - A JSON object containing the query table details (e.g., view name, SQL query, columns).
+    - An error message if the operation failed.
+  `,
+  args: {
+    workspaceId: z.string().describe("The ID of the workspace containing the query table"),
+    queryTableId: z.string().describe("The ID of the query table to retrieve details for"),
+    orgId: z
+      .string()
+      .optional()
+      .describe("The ID of the organization to which the workspace belongs. Defaults to config.ORGID if not provided."),
+  },
+  handler: async ({ workspaceId, queryTableId, orgId }) => {
+    try {
+      if (!orgId) {
+        orgId = config.ORGID || "";
+      }
+      return await retryWithFallback(
+        [orgId],
+        workspaceId,
+        "WORKSPACE",
+        async (org_id, workspace, qtId) => {
+          const ac = getAnalyticsClient();
+          const workspaceInst = ac.getWorkspaceInstance(org_id, workspace);
+          const details = await (workspaceInst as any).getQueryTableDetails(qtId);
+          return ToolResponse(JSON.stringify(details));
+        },
+        workspaceId,
+        queryTableId
+      );
+    } catch (err) {
+      return logAndReturnError(err, "An error occurred while fetching the query table details");
+    }
+  },
+});
+
+defineTool({
+  name: "getFolders",
+  description: `
+    Use Case:
+    1) List all folders in a specified workspace to discover the folder structure.
+    2) Use this to get folder IDs before creating new views, moving views to folders, or when you need folder IDs for createFolder, moveViewsToFolder, or renameFolder operations.
+
+    Important Notes:
+    1) In Zoho Analytics, folders are used to organize views (tables, reports, dashboards) within a workspace.
+    2) Returns folder metadata such as folder IDs, names, descriptions, default status, creator, and creation time.
+    3) Folders support exactly 2 levels of nesting: a workspace can contain root-level folders (level 1), and each root-level folder can contain sub-folders (level 2).
+
+    Returns:
+    - A JSON array of folder objects. Each object contains:
+      - folderId: The unique identifier of the folder.
+      - folderName: The display name of the folder.
+      - folderDesc: A description of the folder (if available).
+      - isDefault: Boolean indicating if this is the default folder.
+      - createdBy: Email address of the folder creator.
+      - createdTime: Unix timestamp of when the folder was created.
+    - An error message if the operation failed.
+  `,
+  args: {
+    workspaceId: z.string().describe("The ID of the workspace to list folders from"),
+    orgId: z
+      .string()
+      .optional()
+      .describe("The ID of the organization. Defaults to config.ORGID if not provided."),
+  },
+  handler: async ({ workspaceId, orgId }) => {
+    try {
+      if (!orgId) {
+        orgId = config.ORGID || "";
+      }
+      return await retryWithFallback(
+        [orgId],
+        workspaceId,
+        "WORKSPACE",
+        async (org_id, workspace) => {
+          const ac = getAnalyticsClient();
+          const workspaceInst = ac.getWorkspaceInstance(org_id, workspace);
+          const folders = await (workspaceInst as any).getFolders();
+          
+          if (!folders || folders.length === 0) {
+            return ToolResponse("No folders found in this workspace.");
+          }
+
+          return ToolResponse(JSON.stringify(folders, null, 2));
+        },
+        workspaceId
+      );
+    } catch (err) {
+      return logAndReturnError(err, "An error occurred while fetching folders");
     }
   },
 });

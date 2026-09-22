@@ -398,6 +398,14 @@ declare module './AnalyticsClient' {
         editQueryTable(viewId: string, sqlQuery: string, config?: Config): Promise<void>;
 
         /**
+         * Returns details of the specified query table.
+         * @param {string} queryTableId - Id of the query table.
+         * @returns {Promise<Object>} Query table details.
+         * @throws {Error} If the request failed due to some error.
+         */
+        getQueryTableDetails(queryTableId: string): Promise<Object>;
+
+        /**
          * Returns the secret key of the specified workspace.
          * @param {Config} [config] - Contains any additional control attributes.
          * @returns {Promise<string>} Workspace secret key.
