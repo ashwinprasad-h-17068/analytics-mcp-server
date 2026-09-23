@@ -12,9 +12,9 @@ Creating tables, adding columns, and inspecting table schema.
 
 ### 2. Query Tables
 
-Query tables are SQL-based materialized views built on top of base tables in the same workspace. They are created and managed as part of workspace operations.
+Query tables are SQL-based materialized views built on top of base tables in the same workspace. They allow you to pre-join, filter, or aggregate data into reusable named views.
 
-→ See the **Create a Query Table** section in [workspace_management.md](./workspace_management.md).
+→ Load [data_modelling_query_tables.md](./data_modelling_query_tables.md) for tool usage.
 
 ### 3. Relationships (Lookups)
 

@@ -56,48 +56,177 @@ execute_analytics_tool(
 
 ---
 
-## 2. Add a Column
+## 2. Add Columns to a Table
 
-Adds a new column to an existing table.
+Adds one or more columns to an existing table.
 
 **Arguments:**
-- `workspace_id` (required): The ID of the workspace containing the table.
-- `table_id` (required): The ID of the table to add the column to.
-- `column_name` (required): The name of the new column.
-- `data_type` (required): The data type of the column (same supported values as above).
-- `description` (optional): A brief description of the column's purpose.
+- `workspaceId` (required): The ID of the workspace containing the table.
+- `viewId` (required): The ID of the view (table) to which columns should be added.
+- `columns` (required): An array of column definitions. Each column object must include:
+  - `columnName` (required): The name of the column.
+  - `dataType` (required): The data type. Supported values:
+    - `PLAIN` — plain text
+    - `MULTI_LINE` — multi-line text
+    - `EMAIL` — email address
+    - `NUMBER` — integer numbers
+    - `POSITIVE_NUMBER` — non-negative integers
+    - `DECIMAL_NUMBER` — decimal numbers
+    - `CURRENCY` — monetary values
+    - `PERCENT` — percentage values
+    - `DATE` — date or datetime
+    - `BOOLEAN` — true/false values
+    - `URL` — web URL
+    - `AUTO_NUMBER` — auto-incrementing number
+    - `GEO` — geographic location (requires `GEOROLE`)
+    - `DURATION` — time duration
+  - `isPIIColumn` (optional): Boolean. Marks the column as containing personal data. Defaults to `false`.
+  - `GEOROLE` (optional, required when `dataType` is `GEO`): Integer 0-8 specifying the geo location type:
+    - `0` — Continent
+    - `1` — Country
+    - `2` — State/Province
+    - `3` — County/District
+    - `4` — City
+    - `5` — Zip Code
+    - `6` — Latitude
+    - `7` — Longitude
+    - `8` — Airport
 
+**Tool call:**
 ```
 execute_analytics_tool(
-    "add_column",
+    "addColumn",
     {
-        "workspace_id": "<workspace_id>",
-        "table_id": "<table_id>",
-        "column_name": "<column_name>",
-        "data_type": "<data_type>",
-        "description": "<description>"
+        "workspaceId": "<workspace_id>",
+        "viewId": "<table_id>",
+        "columns": [
+            {
+                "columnName": "<column_name>",
+                "dataType": "<data_type>",
+                "isPIIColumn": false
+            }
+        ]
     }
 )
 ```
 
-**Example:**
+**Example 1 — Add Region and Notes columns:**
 
 ```
 execute_analytics_tool(
-    "add_column",
+    "addColumn",
     {
-        "workspace_id": "123456789",
-        "table_id": "987654321",
-        "column_name": "Region",
-        "data_type": "PLAIN",
-        "description": "Sales region for the order"
+        "workspaceId": "123456789",
+        "viewId": "987654321",
+        "columns": [
+            {
+                "columnName": "Region",
+                "dataType": "PLAIN"
+            },
+            {
+                "columnName": "Notes",
+                "dataType": "MULTI_LINE"
+            }
+        ]
+    }
+)
+```
+
+**Example 2 — Add a GEO column with GEOROLE:**
+
+```
+execute_analytics_tool(
+    "addColumn",
+    {
+        "workspaceId": "123456789",
+        "viewId": "987654321",
+        "columns": [
+            {
+                "columnName": "Customer City",
+                "dataType": "GEO",
+                "GEOROLE": 4
+            }
+        ]
+    }
+)
+```
+
+**Example 3 — Add a PII column (customer email):**
+
+```
+execute_analytics_tool(
+    "addColumn",
+    {
+        "workspaceId": "123456789",
+        "viewId": "987654321",
+        "columns": [
+            {
+                "columnName": "Customer Email",
+                "dataType": "EMAIL",
+                "isPIIColumn": true
+            }
+        ]
     }
 )
 ```
 
 ---
 
-## 3. Get Table Schema
+## 3. Delete a Column
+
+Deletes a single column from an existing table.
+
+**Arguments:**
+- `workspaceId` (required): The ID of the workspace containing the table.
+- `viewId` (required): The ID of the view (table) from which the column should be deleted.
+- `columnId` (required): The ID of the column to delete. Use `getViewDetails` to retrieve column IDs.
+- `deleteDependentViews` (optional): Boolean. When `true`, deletes the column even when it has dependent views (reports, query tables, formulas that reference it). When `false` (default), the operation fails if dependent views exist. Use with caution — deleting a column with dependents will also delete those dependent views.
+
+**Tool call:**
+```
+execute_analytics_tool(
+    "deleteColumn",
+    {
+        "workspaceId": "<workspace_id>",
+        "viewId": "<table_id>",
+        "columnId": "<column_id>",
+        "deleteDependentViews": false
+    }
+)
+```
+
+**Example 1 — Delete a column (fails if dependents exist):**
+
+```
+execute_analytics_tool(
+    "deleteColumn",
+    {
+        "workspaceId": "123456789",
+        "viewId": "987654321",
+        "columnId": "555666777"
+    }
+)
+```
+
+**Example 2 — Force delete a column and its dependents:**
+
+```
+execute_analytics_tool(
+    "deleteColumn",
+    {
+        "workspaceId": "123456789",
+        "viewId": "987654321",
+        "columnId": "555666777",
+        "deleteDependentViews": true
+    }
+)
+```
+
+> **Warning:** Setting `deleteDependentViews` to `true` will permanently delete all reports, query tables, formulas, and other views that reference this column. Always verify dependents before using this option.
+
+---
+
+## 4. Get Table Schema
 
 Returns the current column definitions (schema) for a table or query table. Use this to discover column IDs and data types before performing operations that require them (e.g., creating lookups).
 
@@ -122,33 +251,6 @@ execute_analytics_tool(
         "viewId": "987654321"
     }
 )
-```
-
-**Sample response:**
-
-```json
-{
-    "columns": [
-        {
-            "column_id": 123456789,
-            "column_name": "Order ID",
-            "data_type": "PLAIN",
-            "description": "Unique identifier for the order"
-        },
-        {
-            "column_id": 111213141,
-            "column_name": "Amount",
-            "data_type": "CURRENCY",
-            "description": "Total amount for the order"
-        },
-        {
-            "column_id": 151617181,
-            "column_name": "Order Date",
-            "data_type": "DATE",
-            "description": "Date when the order was placed"
-        }
-    ]
-}
 ```
 
 > **Tip:** The `column_id` values returned here are what you'll pass as `sourceColumnId` / `targetColumnId` / `columnId` in lookup operations.

@@ -54,7 +54,7 @@ const cardSchema = z
         'Required for type "VIEW". The display name of an existing report/view in this workspace. Must match exactly.'
       ),
     properties: z
-      .record(z.any())
+      .record(z.string(), z.any())
       .optional()
       .describe('Required for type "VIEW". Can be an empty object {}. Holds view-level display overrides.'),
     content: z

@@ -85,18 +85,32 @@ If you need to perform any of the following:
 Refer to [Data Management](./references/data_management.md) for the appropriate operation.
 
 
-## Reports Creation and Management
+### Reports and Dashboards
 
-These operations are concerned with creating and managing reports such as charts, pivots and summary views. These reports are created on top of tables and query tables in the workspace. if you need to create any operations like creating reports (charts, pivots, summary), or editing them (like applying a filter, changing the chart type, etc.), or deleting them, refer to [Reports Creation and Management](./references/reports_management.md) for all available report management operations that can be performed.
+Reports and dashboards are the visualization and presentation layer of Zoho Analytics.
 
+#### Reports
 
-## Dashboard Management
+Reports are **single visualizations** built on a table or query table:
+- **Charts** — visualizations such as bar, line, pie, scatter, maps, and 30+ other types
+- **Pivot Tables** — multidimensional summaries with rows, columns, and aggregations
+- **Summary Views** — grouped aggregates using group-by and aggregation
 
-A dashboard assembles multiple reports and content cards (HTML, images, titles, embedded URLs, user filter panels) into a single interactive view.
+Reports are standalone workspace objects that can be viewed independently or embedded in dashboards.
 
-If you need to:
-- Read the full configuration (layout, settings, themes) of an existing dashboard
-- Create a new dashboard with a layout of report cards and other content
-- Update an existing dashboard — rename it, add/remove/reposition cards, change visual themes, or modify behavior settings
+#### Dashboards
 
-Refer to [Dashboard Management](./references/dashboard_management.md) for all available dashboard operations.
+Dashboards are **composite views** that combine reports and content on a single canvas:
+- **Report cards** — embed charts, pivots, or summary views
+- **HTML cards** — display custom HTML
+- **Title cards** — headings and section dividers
+- **Image cards** — display images via URL or base64
+- **Embed cards** — embed external URLs or iframes
+- **User filter panels** — interactive filters controlling dashboard cards
+
+#### When to Navigate
+
+| If you need to: | Load: |
+|---|---|
+| Create, read or update a chart, pivot, or summary report | [Reports Management](./references/reports_management.md) |
+| Create, read, or update dashboards | [Dashboard Management](./references/dashboard_management.md) |

@@ -544,6 +544,25 @@ declare module './AnalyticsClient' {
         deleteRow(criteria, config={}): Promise<void>;
 
         updateRow(columnValues, criteria, config={}): Promise<void>
+
+        /**
+         * Add a column in the specified table.
+         * @param {string} columnName - The name of the column.
+         * @param {string} dataType - The data-type of the column.
+         * @param {Config} [config] - Contains any additional control attributes.
+         * @returns {Promise<string>} Created column id.
+         * @throws {Error} If the request failed due to some error.
+         */
+        addColumn(columnName: string, dataType: string, config?: Config): Promise<string>;
+
+        /**
+         * Delete a specified column in the table.
+         * @param {string} columnId - Id of the column.
+         * @param {Config} [config] - Contains any additional control attributes.
+         * @returns {Promise<void>}
+         * @throws {Error} If the request failed due to some error.
+         */
+        deleteColumn(columnId: string, config?: Config): Promise<void>;
     }
 
     class BulkAPI {
