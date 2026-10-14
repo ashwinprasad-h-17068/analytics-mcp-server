@@ -317,19 +317,6 @@ def _is_ip_address(value: str) -> bool:
         return False
 
 
-def _is_domain_trusted(request: Request) -> bool:
-    host = request.headers.get("host", "")
-    if not host:
-        return False
-
-    host = host.split(":")[0].strip().lower()
-    if _is_ip_address(host):
-        return False
-
-    return any(pattern.fullmatch(host) for pattern in Settings.TRUSTED_DOMAIN_PATTERNS)
-
-
-
 def rate_limit(capacity: int, window_seconds: int):
 
     async def dependency(request: Request):
@@ -352,9 +339,8 @@ def rate_limit(capacity: int, window_seconds: int):
 
         elif scenario == "public_network":
             ip_trusted = _is_ip_trusted(client_ip)
-            domain_trusted = _is_domain_trusted(request)
 
-            if not (ip_trusted or domain_trusted):
+            if not (ip_trusted):
                 logger.warning(
                     "Blocked request from untrusted IP %s on path %s",
                     client_ip,
