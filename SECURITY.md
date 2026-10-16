@@ -91,7 +91,7 @@ To accommodate this, raise the limits to reflect the expected number of users fr
 # Allow the organisation's public IP range
 TRUSTED_PUBLIC_NETWORKS=203.0.113.0/24
 # Or restrict by domain
-TRUSTED_DOMAINS_ALLOWLIST=.*\.example\.com
+# TRUSTED_DOMAINS_ALLOWLIST=.*\.example\.com (TRUSTED_DOMAINS_ALLOWLIST is depreciated)
 
 # Adjust limits to account for multiple users sharing one public IP
 PUBLIC_OAUTH_REGISTRATION_RATE_LIMIT_COUNT=100
@@ -126,7 +126,7 @@ The following table lists all available security configuration options. Configur
 | Variable | Default | Description | Depends On | Example Values |
 |----------|---------|-------------|------------|----------------|
 | `TRUSTED_PUBLIC_NETWORKS` | Empty | Comma-separated list of allowed IP addresses, CIDR ranges, or regex patterns. **Required in `public_network` mode** (unless using domain allowlist). | `DEPLOYMENT_SCENARIO=public_network` | `203.0.113.0/24`, `198.51.100.50`, `203\.0\.113\..*` |
-| `TRUSTED_DOMAINS_ALLOWLIST` | Empty | Comma-separated list of domain regex patterns allowed to access the application. Alternative to IP allowlisting in `public_network` mode. | `DEPLOYMENT_SCENARIO=public_network` | `api.example.com`, `.*\.example\.com` |
+| `TRUSTED_DOMAINS_ALLOWLIST` (DEPRECIATED) | Empty | Comma-separated list of domain regex patterns allowed to access the application. Alternative to IP allowlisting in `public_network` mode. | `DEPLOYMENT_SCENARIO=public_network` | `api.example.com`, `.*\.example\.com` |
 
 ### Rate Limiting - Global
 
@@ -300,7 +300,7 @@ TRUSTED_PUBLIC_NETWORKS=203.0.113.0/24,198\.51\.100\..*,192.0.2.50
 
 ---
 
-#### `TRUSTED_DOMAINS_ALLOWLIST`
+#### `TRUSTED_DOMAINS_ALLOWLIST` (DEPRECIATED)
 
 **Description**: Comma-separated list of domain patterns (regex) that are allowed to access the application via the `Host` header.
 
@@ -501,7 +501,7 @@ TRUSTED_PROXY_LIST=173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22
 TRUSTED_PUBLIC_NETWORKS=203.0.113.0/24,198.51.100.50,192.0.2.0/25
 
 # Optional: domain restriction
-TRUSTED_DOMAINS_ALLOWLIST=api.yourcompany.com
+# TRUSTED_DOMAINS_ALLOWLIST=api.yourcompany.com (TRUSTED_DOMAINS_ALLOWLIST is depreciated)
 
 # Public network rate limits (defaults are reasonable)
 # PUBLIC_OAUTH_STANDARD_RATE_LIMIT_COUNT=100
@@ -606,8 +606,6 @@ DEPLOYMENT_SCENARIO=public_network
 ```bash
 DEPLOYMENT_SCENARIO=public_network
 TRUSTED_PUBLIC_NETWORKS=203.0.113.0/24  # Your allowed IPs
-# OR
-TRUSTED_DOMAINS_ALLOWLIST=api.yourcompany.com  # Your allowed domains
 ```
 
 ---
@@ -621,6 +619,8 @@ TRUSTED_DOMAINS_ALLOWLIST=api.yourcompany.com  # Your allowed domains
 **Requirement**: In public network deployments, **TLS must be configured** at your reverse proxy or load balancer. With proper TLS termination, the domain is validated through certificate negotiation before the request ever reaches the application, making Host header spoofing ineffective.
 
 > Domain allowlisting is **not a substitute for TLS** — it is only a meaningful control *on top of* TLS. Exposing this application over plain HTTP on a public network renders `TRUSTED_DOMAINS_ALLOWLIST` protection ineffective.
+
+TRUSTED_DOMAINS_ALLOWLIST is to be depreciated. Please avoid using/setting it in production.
 
 ---
 
@@ -749,29 +749,6 @@ TRUSTED_PROXY_LIST=10.0.1.50,10.0.1.51  # Specific proxy IPs only
      ```bash
      redis-cli -h $REDIS_HOST -p $REDIS_PORT -a $REDIS_PASSWORD ping
      ```
-
----
-
-### Issue: All Requests Blocked in Public Network Mode
-
-**Symptoms**: All requests return `403 Forbidden: Access denied: request not from trusted network`
-
-**Solutions**:
-
-1. **Verify access control lists are set**:
-   ```bash
-   # Add your IP/network
-   TRUSTED_PUBLIC_NETWORKS=203.0.113.0/24
-   ```
-
-2. **Check client IP detection**:
-   - View application logs to see detected client IP
-   - Ensure the detected IP is in your allowlist
-
-3. **Temporarily use domain allowlist instead**:
-   ```bash
-   TRUSTED_DOMAINS_ALLOWLIST=api.yourcompany.com
-   ```
 
 ---
 
